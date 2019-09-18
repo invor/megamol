@@ -402,6 +402,8 @@ void CinematicView::Render(const mmcRenderViewContext& context) {
     ///---
     ///NEW ccc->setCameraParameters(std::make_shared<megamol::core::view::Camera_2>(&this->cam));
 
+    ccc->setCameraParameters(&this->cam);
+
     if (!(*ccc)(CallKeyframeKeeper::CallForSetCameraForKeyframe)) return;
 
         // Render to texture ------------------------------------------------------------

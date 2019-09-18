@@ -163,10 +163,10 @@ namespace cinematic {
         }
 
         // CAMERA PARAMETERS
-        inline void setCameraParameters(std::shared_ptr<megamol::core::view::Camera_2> c) {
+        inline void setCameraParameters(megamol::core::view::Camera_2* c) {
             this->cameraParam = c;
         }
-        inline std::shared_ptr<megamol::core::view::Camera_2> getCameraParameters() {
+        inline megamol::core::view::Camera_2* getCameraParameters() {
             return this->cameraParam;
         }
 
@@ -217,7 +217,8 @@ namespace cinematic {
         **********************************************************************/
 
 		// Pointer to array of keyframes
-		std::shared_ptr<megamol::core::view::Camera_2> cameraParam;
+		//std::shared_ptr<megamol::core::view::Camera_2> cameraParam;
+        megamol::core::view::Camera_2*                 cameraParam;
 		std::shared_ptr<std::vector<glm::vec3 >>       interpolCamPos;
 		std::shared_ptr<std::vector<Keyframe>>	       keyframes;
         std::shared_ptr<vislib::math::Cuboid<float>>   boundingbox;
