@@ -11,10 +11,11 @@
 #    pragma once
 #endif /* (defined(_MSC_VER) && (_MSC_VER > 1000)) */
 
-#include "FEMDataCall.h"
 #include "archvis/archvis.h"
 #include "mmcore/CalleeSlot.h"
 #include "mmcore/param/ParamSlot.h"
+
+#include "FEMModel.h"
 
 namespace megamol {
 namespace archvis {

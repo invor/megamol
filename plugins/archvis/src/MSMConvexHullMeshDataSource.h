@@ -53,7 +53,7 @@ protected:
 private:
     megamol::core::CallerSlot m_MSM_callerSlot;
 
-    uint64_t m_MSM_hash;
+    uint32_t m_version;
 };
 
 }

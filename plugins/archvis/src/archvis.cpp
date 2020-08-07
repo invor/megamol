@@ -12,17 +12,15 @@
 #include "mmcore/versioninfo.h"
 #include "vislib/vislibversion.h"
 
+#include "ArchVisCalls.h"
 #include "ArchVisMSMDataSource.h"
 #include "CreateFEMModel.h"
 #include "CreateMSM.h"
-#include "FEMDataCall.h"
 #include "FEMModel.h"
 #include "FEMMeshDataSource.h"
-#include "FEMMaterialDataSource.h"
 #include "FEMRenderTaskDataSource.h"
 #include "FEMLoader.h"
 #include "MSMConvexHullMeshDataSource.h"
-#include "MSMDataCall.h"
 #include "MSMRenderTaskDataSource.h"
 
 
@@ -64,7 +62,6 @@ namespace {
             this->module_descriptions.RegisterAutoDescription<megamol::archvis::CreateFEMModel>();
             this->module_descriptions.RegisterAutoDescription<megamol::archvis::CreateMSM>();
 			this->module_descriptions.RegisterAutoDescription<megamol::archvis::FEMMeshDataSource>();
-            this->module_descriptions.RegisterAutoDescription<megamol::archvis::FEMMaterialDataSource>();
 			this->module_descriptions.RegisterAutoDescription<megamol::archvis::FEMRenderTaskDataSource>();
 			this->module_descriptions.RegisterAutoDescription<megamol::archvis::FEMLoader>();
             this->module_descriptions.RegisterAutoDescription<megamol::archvis::MSMConvexHullDataSource>();
@@ -80,8 +77,8 @@ namespace {
             //   this->call_descriptions.RegisterAutoDescription<megamol::archvis::MyCall2>();
             //   ...
             //
-			this->call_descriptions.RegisterAutoDescription<megamol::archvis::FEMDataCall>();
-            this->call_descriptions.RegisterAutoDescription<megamol::archvis::MSMDataCall>();
+			this->call_descriptions.RegisterAutoDescription<megamol::archvis::CallFEMData>();
+            this->call_descriptions.RegisterAutoDescription<megamol::archvis::CallMSMData>();
 
         }
         MEGAMOLCORE_PLUGIN200UTIL_IMPLEMENT_plugininstance_connectStatics

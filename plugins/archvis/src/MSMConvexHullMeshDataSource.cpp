@@ -1,56 +1,53 @@
 #include "MSMConvexHullMeshDataSource.h"
 
-#include "MSMDataCall.h"
-#include "mesh/MeshCalls.h"
-
 #include <QuickHull.hpp>
 
-megamol::archvis::MSMConvexHullDataSource::MSMConvexHullDataSource() 
-: m_MSM_callerSlot("getMSM", "Connects the "), m_MSM_hash(0) {
-    this->m_MSM_callerSlot.SetCompatibleCall<MSMDataCallDescription>();
+#include "mesh/MeshCalls.h"
+
+#include "ArchVisCalls.h"
+
+megamol::archvis::MSMConvexHullDataSource::MSMConvexHullDataSource()
+    : m_MSM_callerSlot("getMSM", "Connects the "), m_version(0) {
+    this->m_MSM_callerSlot.SetCompatibleCall<CallMSMDataDescription>();
     this->MakeSlotAvailable(&this->m_MSM_callerSlot);
 }
 
 megamol::archvis::MSMConvexHullDataSource::~MSMConvexHullDataSource() {}
 
-bool megamol::archvis::MSMConvexHullDataSource::getDataCallback(core::Call& caller) { 
+bool megamol::archvis::MSMConvexHullDataSource::getDataCallback(core::Call& caller) {
     mesh::CallGPUMeshData* mc = dynamic_cast<mesh::CallGPUMeshData*>(&caller);
     if (mc == NULL) return false;
 
-    MSMDataCall* msm_call = this->m_MSM_callerSlot.CallAs<MSMDataCall>();
+    CallMSMData* msm_call = this->m_MSM_callerSlot.CallAs<megamol::archvis::CallMSMData>();
     if (msm_call == NULL) return false;
 
     if (!(*msm_call)(0)) return false;
 
-    if (this->m_MSM_hash == msm_call->DataHash()) {
-        return true;
-    }
 
-    //TODO create mesh
-    quickhull::QuickHull<float> qh;
-    std::vector<quickhull::Vector3<float>> point_cloud;
-
-    auto msm = msm_call->getMSM();
-
-    size_t node_cnt = msm->getNodeCount();
-    point_cloud.reserve(node_cnt);
-
-    for (int i = 0; i < node_cnt; ++i)
+    if (msm_call->hasUpdate())
     {
-        point_cloud.push_back(quickhull::Vector3<float>(
-            msm->accessNodePositions()[i].X(),
-            msm->accessNodePositions()[i].Y(),
-            msm->accessNodePositions()[i].Z())
-        );
+        ++m_version;
+
+        // TODO create mesh
+        quickhull::QuickHull<float> qh;
+        std::vector<quickhull::Vector3<float>> point_cloud;
+
+        auto msm = msm_call->getData();
+
+        size_t node_cnt = msm->getNodeCount();
+        point_cloud.reserve(node_cnt);
+
+        for (int i = 0; i < node_cnt; ++i) {
+            point_cloud.push_back(quickhull::Vector3<float>(msm->accessNodePositions()[i].X(),
+                msm->accessNodePositions()[i].Y(), msm->accessNodePositions()[i].Z()));
+        }
+
+        auto hull = qh.getConvexHull(point_cloud, true, false);
+        auto indexBuffer = hull.getIndexBuffer();
+        auto vertexBuffer = hull.getVertexBuffer();
     }
 
-    auto hull = qh.getConvexHull(point_cloud, true, false);
-    auto indexBuffer = hull.getIndexBuffer();
-    auto vertexBuffer = hull.getVertexBuffer();
-
-    mc->setData(m_gpu_meshes);
-
-    this->m_MSM_hash = msm_call->DataHash();
+    mc->setData(m_gpu_meshes, m_version);
 
     return true;
 }
