@@ -11,6 +11,7 @@
 #include "rendering/GlyphRenderer.h"
 #include "rendering/GrimRenderer.h"
 #include "rendering/SphereRenderer.h"
+#include "temporal_aa/temporal_aa.h"
 
 namespace megamol::moldyn_gl {
 class MoldynGLPluginInstance : public megamol::core::utility::plugins::AbstractPluginInstance {
@@ -31,6 +32,7 @@ public:
         this->module_descriptions.RegisterAutoDescription<megamol::moldyn_gl::rendering::ArrowRenderer>();
         this->module_descriptions.RegisterAutoDescription<megamol::moldyn_gl::rendering::SphereRenderer>();
         this->module_descriptions.RegisterAutoDescription<megamol::moldyn_gl::rendering::GlyphRenderer>();
+        this->module_descriptions.RegisterAutoDescription<megamol::moldyn_gl::TemporalAA>();
     }
 };
 } // namespace megamol::moldyn_gl
