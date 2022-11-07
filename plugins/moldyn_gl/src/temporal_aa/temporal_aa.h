@@ -55,6 +55,7 @@ protected:
     virtual bool create();
     virtual void release();
     virtual bool Render(CallRender3DGL& call);
+    virtual void setupCamera(core::view::Camera& cam);
     virtual bool GetExtents(CallRender3DGL& call);
 
 private:
