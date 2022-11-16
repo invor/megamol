@@ -1,31 +1,12 @@
-// TODO:
 #version 450
 
-layout(location=0)in vec4 position;
+#include "mmstd_gl/common/quad_vertices.inc.glsl"
 
-uniform mat4 projection;
-uniform mat4 view;
-uniform vec2 resolution;
-uniform uint total_frames;
+out vec2 uvCoords;
 
-uniform vec2 halton_sequence[128];
-uniform float halton_scale;
-uniform uint num_samples;
-
-void main()
-{
-    float delta_width=1./resolution.x;
-    float delta_height=1./resolution.y;
+void main(){
+    vec2 coord=quadVertexPosition();
     
-    uint index=total_frames%num_samples;
-    vec2 jitter=vec2(halton_sequence[index].x*delta_width,halton_sequence[index].y*delta_height);
-    
-    mat4 jitter_mat=mat4(1.);
-    if(halton_scale>0)
-    {
-        jitter_mat[3][0]+=jitter.x*halton_scale;
-        jitter_mat[3][1]+=jitter.y*halton_scale;
-    }
-    
-    gl_Position=jitter_mat*projection*view*position;
+    gl_Position=vec4(2.f*coord-1.f,0.f,1.f);
+    uvCoords=coord;
 }

@@ -56,18 +56,28 @@ protected:
     virtual void release();
     virtual bool Render(CallRender3DGL& call);
     virtual void setupCamera(core::view::Camera& cam);
+    virtual void setupTextures();
     virtual bool GetExtents(CallRender3DGL& call);
 
 private:
     std::shared_ptr<glowl::FramebufferObject> fbo_;
-
     std::shared_ptr<glowl::GLSLProgram> temporal_aa_prgm_;
 
+    glowl::TextureLayout texLayout_;
+    glowl::TextureLayout distTexLayout_;
+    std::unique_ptr<glowl::Texture2D> texRead_;
+    std::unique_ptr<glowl::Texture2D> texWrite_;
+    std::unique_ptr<glowl::Texture2D> distTexRead_;
+    std::unique_ptr<glowl::Texture2D> distTexWrite_;
+
     // Render State
-    glm::mat4 projection_;
+    glm::mat4 viewProjMx_;
+    glm::mat4 lastViewProjMx_;
     glm::mat4 view_;
     glm::vec2 resolution_;
     glm::uint total_frames_;
+    int oldWidth_ = -1;
+    int oldHeight_ = -1;
 
     // halton variables
     glm::vec2 halton_sequence_[128];
