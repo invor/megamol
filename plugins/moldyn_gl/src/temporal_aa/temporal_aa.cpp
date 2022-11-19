@@ -35,8 +35,8 @@ bool TemporalAA::create() {
             glm::vec2(halton::createHaltonNumber(iter + 1, 2), halton::createHaltonNumber(iter + 1, 3));
     }
 
-    this->halton_scale_ = 10.0f; // TODO: make this variable changeable in megamol UI
-    this->num_samples_ = 4;      // TODO: make this variable changeable in megamol UI
+    this->halton_scale_ = 1.0f; // TODO: make this variable changeable in megamol UI
+    this->num_samples_ = 4;     // TODO: make this variable changeable in megamol UI
     this->total_frames_ = 0;
 
     // Store texture layout for later resize
@@ -131,10 +131,11 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 
     rhs_chained_call->SetFramebuffer(lhs_input_fbo);
     rhs_chained_call->SetCamera(jittered_cam);
+
     (*rhs_chained_call)(core::view::AbstractCallRender::FnRender);
 
     // in first frame just use the same colorbuffer
-    if (this->total_frames_++ == 1) {
+    if (this->total_frames_ == 1) {
         lhs_input_fbo->getColorAttachment(0)->copy(
             lhs_input_fbo->getColorAttachment(0).get(), fbo_->getColorAttachment(1).get());
     }
@@ -176,7 +177,6 @@ bool TemporalAA::Render(CallRender3DGL& call) {
         lhs_input_fbo->getColorAttachment(0).get(), fbo_->getColorAttachment(1).get());
     texRead_.swap(texWrite_);
     distTexRead_.swap(distTexWrite_);
-
 
     return true;
 }

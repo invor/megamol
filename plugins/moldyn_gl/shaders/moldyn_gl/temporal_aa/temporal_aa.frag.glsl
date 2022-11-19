@@ -29,9 +29,30 @@ void main(){
     vec4 cur_color=vec4(0.f);
     vec4 color=vec4(0.f);
     
+    // Arbitrary out of range numbers
+    vec4 min_color=vec4(9999.f,9999.f,9999.f,1.f);
+    vec4 max_color=vec4(-9999.f,-9999.f,-9999.f,1.f);
+    
+    // Sample a 3x3 neighborhood to create a box in color space
+    for(int x=-1;x<=1;++x)
+    {
+        for(int y=-1;y<=1;++y)
+        {
+            ivec2 cur_coord=imgCoord+ivec2(x,y);
+            vec4 temp_color=texelFetch(curr_color_tex,cur_coord,0);;// Sample neighbor
+            min_color=min(min_color,temp_color);// Take min and max
+            max_color=max(max_color,temp_color);
+        }
+    }
+    
     prev_color=texelFetch(prev_color_tex,imgCoord,0);
+    // Clamp previous color to min/max bounding box
+    vec4 previousColorClamped=clamp(prev_color,min_color,max_color);
+    
     cur_color=texelFetch(curr_color_tex,imgCoord,0);
-    color=.1*cur_color+.9*prev_color;
+    float alpha=cur_color.a;
+    color=.1*cur_color+.9*previousColorClamped;
+    color.a=1.f;
     
     imageStore(imgPosWrite,imgCoord,vec4(posWorldSpace,0.f,0.f));
     
