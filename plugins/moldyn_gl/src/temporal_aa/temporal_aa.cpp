@@ -9,9 +9,10 @@ using namespace megamol::compositing_gl;
 
 TemporalAA::TemporalAA(void)
         : core::view::RendererModule<CallRender3DGL, mmstd_gl::ModuleGL>()
-        , m_motion_vector_texture_call("Motion Vectors Texture", "Access motion vector texture texture") {
-    this->m_motion_vector_texture_call.SetCompatibleCall<CallTexture2DDescription>();
-    this->MakeSlotAvailable(&this->m_motion_vector_texture_call);
+        , m_motion_vector_texture_call_("Motion Vectors Texture", "Access motion vector texture texture")
+        , m_dummy_motion_vector_tx_(nullptr) {
+    this->m_motion_vector_texture_call_.SetCompatibleCall<CallTexture2DDescription>();
+    this->MakeSlotAvailable(&this->m_motion_vector_texture_call_);
     this->MakeSlotAvailable(&this->chainRenderSlot);
     this->MakeSlotAvailable(&this->renderSlot);
 }
@@ -140,6 +141,18 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 
     (*rhs_chained_call)(core::view::AbstractCallRender::FnRender);
 
+    // get rhs texture call
+    std::shared_ptr<glowl::Texture2D> motion_vector_texture = m_dummy_motion_vector_tx_;
+    CallTexture2D* mvt = this->m_motion_vector_texture_call_.CallAs<CallTexture2D>();
+    if (mvt != NULL) {
+        (*mvt)(0);
+        motion_vector_texture = mvt->getData();
+    }
+
+    if (motion_vector_texture == nullptr) {
+        return false;
+    }
+
     // in first frame just use the same colorbuffer
     if (this->total_frames_ == 1) {
         lhs_input_fbo->getColorAttachment(0)->copy(
@@ -169,6 +182,10 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     glActiveTexture(GL_TEXTURE1);
     fbo_->bindColorbuffer(1);
     temporal_aa_prgm_->setUniform("prev_color_tex", 1);
+
+    glActiveTexture(GL_TEXTURE2);
+    motion_vector_texture->bindTexture();
+    temporal_aa_prgm_->setUniform("motion_vector_tex", 2);
 
     texRead_->bindImage(0, GL_READ_ONLY);
     texWrite_->bindImage(1, GL_WRITE_ONLY);

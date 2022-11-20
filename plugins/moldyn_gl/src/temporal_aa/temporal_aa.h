@@ -62,6 +62,9 @@ protected:
     virtual bool GetExtents(CallRender3DGL& call);
 
 private:
+    /** Dummy motion vector texture to use when no texture is connected */
+    std::shared_ptr<glowl::Texture2D> m_dummy_motion_vector_tx_;
+
     std::shared_ptr<glowl::FramebufferObject> fbo_;
     std::shared_ptr<glowl::GLSLProgram> temporal_aa_prgm_;
 
@@ -84,7 +87,7 @@ private:
     int oldHeight_ = -1;
 
     // input slot for motion vectors
-    core::CallerSlot m_motion_vector_texture_call;
+    core::CallerSlot m_motion_vector_texture_call_;
 
     // halton variables
     glm::vec2 halton_sequence_[128];

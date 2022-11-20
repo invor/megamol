@@ -3,6 +3,7 @@
 //uniform sampler2D prev_color_tex;
 uniform sampler2D curr_color_tex;
 uniform sampler2D prev_color_tex;
+uniform sampler2D motion_vector_tex;
 
 layout(binding=0,rgba8)uniform image2D imgRead;
 layout(binding=1,rgba8)uniform image2D imgWrite;
