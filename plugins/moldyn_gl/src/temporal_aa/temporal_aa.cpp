@@ -1,11 +1,17 @@
 #include "temporal_aa.h"
 
+#include "compositing_gl/CompositingCalls.h"
 #include "halton_sequence.h"
-#include "mmstd_gl/renderer/Renderer3DModuleGL.h"
+#include "mmcore/CoreInstance.h"
 
 using namespace megamol::moldyn_gl;
+using namespace megamol::compositing_gl;
 
-TemporalAA::TemporalAA(void) : core::view::RendererModule<CallRender3DGL, mmstd_gl::ModuleGL>() {
+TemporalAA::TemporalAA(void)
+        : core::view::RendererModule<CallRender3DGL, mmstd_gl::ModuleGL>()
+        , m_motion_vector_texture_call("Motion Vectors Texture", "Access motion vector texture texture") {
+    this->m_motion_vector_texture_call.SetCompatibleCall<CallTexture2DDescription>();
+    this->MakeSlotAvailable(&this->m_motion_vector_texture_call);
     this->MakeSlotAvailable(&this->chainRenderSlot);
     this->MakeSlotAvailable(&this->renderSlot);
 }

@@ -6,10 +6,11 @@
 megamol_plugin(moldyn_gl
   BUILD_DEFAULT ON
   DEPENDS_FEATURES
-    opengl
+  opengl
   DEPENDS_PLUGINS
-    mmstd
-    mmstd_gl
-    moldyn
-    datatools
-    geometry_calls)
+  mmstd
+  mmstd_gl
+  moldyn
+  datatools
+  geometry_calls
+  compositing_gl)

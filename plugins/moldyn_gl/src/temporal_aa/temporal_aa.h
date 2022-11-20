@@ -7,10 +7,12 @@
 
 #include "mmcore/Call.h"
 #include "mmcore/CalleeSlot.h"
+#include "mmcore/CallerSlot.h"
 #include "mmcore/CoreInstance.h"
 #include "mmcore_gl/utility/ShaderFactory.h"
 #include "mmstd/renderer/RendererModule.h"
 #include "mmstd_gl/ModuleGL.h"
+#include "mmstd_gl/renderer/CallRender3DGL.h"
 #include "mmstd_gl/renderer/Renderer3DModuleGL.h"
 
 using namespace megamol::mmstd_gl;
@@ -75,9 +77,14 @@ private:
     glm::mat4 lastViewProjMx_;
     glm::mat4 view_;
     glm::vec2 resolution_;
+    glm::vec2 prev_jitter_;
+    glm::vec2 curr_jitter_;
     glm::uint total_frames_;
     int oldWidth_ = -1;
     int oldHeight_ = -1;
+
+    // input slot for motion vectors
+    core::CallerSlot m_motion_vector_texture_call;
 
     // halton variables
     glm::vec2 halton_sequence_[128];
