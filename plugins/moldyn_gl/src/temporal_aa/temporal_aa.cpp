@@ -11,43 +11,42 @@ TemporalAA::TemporalAA(void)
         : core::view::RendererModule<CallRender3DGL, mmstd_gl::ModuleGL>()
         , m_motion_vector_texture_call_("Motion Vectors Texture", "Access motion vector texture texture")
         , m_dummy_motion_vector_tx_(nullptr) {
-    this->m_motion_vector_texture_call_.SetCompatibleCall<CallTexture2DDescription>();
-    this->MakeSlotAvailable(&this->m_motion_vector_texture_call_);
-    this->MakeSlotAvailable(&this->chainRenderSlot);
-    this->MakeSlotAvailable(&this->renderSlot);
+    m_motion_vector_texture_call_.SetCompatibleCall<CallTexture2DDescription>();
+    MakeSlotAvailable(&m_motion_vector_texture_call_);
+    MakeSlotAvailable(&chainRenderSlot);
+    MakeSlotAvailable(&renderSlot);
 }
 
 TemporalAA::~TemporalAA(void) {
-    this->Release();
+    Release();
 }
 
 bool TemporalAA::create() {
-    auto const shader_options = msf::ShaderFactoryOptionsOpenGL(this->GetCoreInstance()->GetShaderPaths());
+    auto const shader_options = msf::ShaderFactoryOptionsOpenGL(GetCoreInstance()->GetShaderPaths());
 
     try {
-        this->temporal_aa_prgm_ = core::utility::make_glowl_shader("temporal_aa", shader_options,
+        temporal_aa_prgm_ = core::utility::make_glowl_shader("temporal_aa", shader_options,
             "moldyn_gl/temporal_aa/temporal_aa.vert.glsl", "moldyn_gl/temporal_aa/temporal_aa.frag.glsl");
     } catch (std::exception& e) {
         megamol::core::utility::log::Log::DefaultLog.WriteError(("TemporalAA: " + std::string(e.what())).c_str());
         return false;
     }
 
-    this->fbo_ = std::make_shared<glowl::FramebufferObject>(1, 1);
-    this->fbo_->createColorAttachment(GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
-    this->fbo_->createColorAttachment(GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
+    fbo_ = std::make_shared<glowl::FramebufferObject>(1, 1);
+    fbo_->createColorAttachment(GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
 
     // create halton numbers
     for (int iter = 0; iter < 128; iter++) {
-        this->halton_sequence_[iter] =
+        halton_sequence_[iter] =
             glm::vec2(halton::createHaltonNumber(iter + 1, 2), halton::createHaltonNumber(iter + 1, 3));
     }
 
-    this->halton_scale_ = 1.0f; // TODO: make this variable changeable in megamol UI
-    this->num_samples_ = 4;     // TODO: make this variable changeable in megamol UI
-    this->total_frames_ = 0;
+    halton_scale_ = 1.0f; // TODO: make this variable changeable in megamol UI
+    num_samples_ = 4;     // TODO: make this variable changeable in megamol UI
+    total_frames_ = 0;
 
     // Store texture layout for later resize
-    this->texLayout_ = glowl::TextureLayout(GL_RGBA8, 1, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, 1,
+    texLayout_ = glowl::TextureLayout(GL_RGBA8, 1, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, 1,
         {
             {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER},
             {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER},
@@ -56,7 +55,7 @@ bool TemporalAA::create() {
             {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
         },
         {});
-    this->distTexLayout_ = glowl::TextureLayout(GL_RG32F, 1, 1, 1, GL_RG, GL_FLOAT, 1,
+    distTexLayout_ = glowl::TextureLayout(GL_RG32F, 1, 1, 1, GL_RG, GL_FLOAT, 1,
         {
             {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER},
             {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER},
@@ -66,19 +65,19 @@ bool TemporalAA::create() {
         },
         {});
 
-    this->texRead_ = std::make_unique<glowl::Texture2D>("texStoreA", texLayout_, nullptr);
-    this->texWrite_ = std::make_unique<glowl::Texture2D>("texStoreB", texLayout_, nullptr);
-    this->distTexRead_ = std::make_unique<glowl::Texture2D>("distTexR", distTexLayout_, nullptr);
-    this->distTexWrite_ = std::make_unique<glowl::Texture2D>("distTexW", distTexLayout_, nullptr);
+    texRead_ = std::make_unique<glowl::Texture2D>("texStoreA", texLayout_, nullptr);
+    texWrite_ = std::make_unique<glowl::Texture2D>("texStoreB", texLayout_, nullptr);
+    distTexRead_ = std::make_unique<glowl::Texture2D>("distTexR", distTexLayout_, nullptr);
+    distTexWrite_ = std::make_unique<glowl::Texture2D>("distTexW", distTexLayout_, nullptr);
     return true;
 }
 
 void TemporalAA::release() {
-    this->Release();
+    Release();
 }
 
 bool TemporalAA::GetExtents(CallRender3DGL& call) {
-    CallRender3DGL* chainedCall = this->chainRenderSlot.template CallAs<CallRender3DGL>();
+    CallRender3DGL* chainedCall = chainRenderSlot.template CallAs<CallRender3DGL>();
     if (chainedCall != nullptr) {
         *chainedCall = call;
         bool retVal = (*chainedCall)(core::view::AbstractCallRender::FnGetExtents);
@@ -88,7 +87,7 @@ bool TemporalAA::GetExtents(CallRender3DGL& call) {
 }
 
 bool TemporalAA::Render(CallRender3DGL& call) {
-    CallRender3DGL* rhs_chained_call = this->chainRenderSlot.template CallAs<CallRender3DGL>();
+    CallRender3DGL* rhs_chained_call = chainRenderSlot.template CallAs<CallRender3DGL>();
     if (rhs_chained_call == nullptr) {
         megamol::core::utility::log::Log::DefaultLog.WriteError(
             "The TemporalAA-Module does not work without a renderer attached to its right");
@@ -118,23 +117,13 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     lastViewProjMx_ = viewProjMx_;
     viewProjMx_ = cam.getProjectionMatrix() * cam.getViewMatrix();
 
-    this->view_ = cam.getViewMatrix();
-    this->resolution_ = glm::vec2(lhs_input_fbo->getWidth(), lhs_input_fbo->getHeight());
-    this->total_frames_++;
-
-    //glActiveTexture(GL_TEXTURE10);
-    //lhs_input_fbo->bindColorbuffer(10);
-
-    // Compared to Amortization we just pass the previous frame buffer
-    //this->fbo_ = lhs_input_fbo;
-    //this->fbo_->bind();
-    //glClearColor(bg.r * bg.a, bg.g * bg.a, bg.b * bg.a, bg.a);
-    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    view_ = cam.getViewMatrix();
+    resolution_ = glm::vec2(lhs_input_fbo->getWidth(), lhs_input_fbo->getHeight());
+    total_frames_++;
 
     // now jitter the camera
     auto jittered_cam = cam;
     setupCamera(jittered_cam);
-
 
     rhs_chained_call->SetFramebuffer(lhs_input_fbo);
     rhs_chained_call->SetCamera(jittered_cam);
@@ -143,7 +132,7 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 
     // get rhs texture call
     std::shared_ptr<glowl::Texture2D> motion_vector_texture = m_dummy_motion_vector_tx_;
-    CallTexture2D* mvt = this->m_motion_vector_texture_call_.CallAs<CallTexture2D>();
+    CallTexture2D* mvt = m_motion_vector_texture_call_.CallAs<CallTexture2D>();
     if (mvt != NULL) {
         (*mvt)(0);
         motion_vector_texture = mvt->getData();
@@ -154,9 +143,9 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     }
 
     // in first frame just use the same colorbuffer
-    if (this->total_frames_ == 1) {
+    if (total_frames_ == 1) {
         lhs_input_fbo->getColorAttachment(0)->copy(
-            lhs_input_fbo->getColorAttachment(0).get(), fbo_->getColorAttachment(1).get());
+            lhs_input_fbo->getColorAttachment(0).get(), fbo_->getColorAttachment(0).get());
     }
 
     glViewport(0, 0, w, h);
@@ -174,18 +163,20 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     temporal_aa_prgm_->setUniform("camCenter", cam.getPose().position);
     temporal_aa_prgm_->setUniform("camAspect", intrinsics.aspect.value());
     temporal_aa_prgm_->setUniform("frustumHeight", frustrum_height);
+    temporal_aa_prgm_->setUniform("prevJitter", prev_jitter_);
+    temporal_aa_prgm_->setUniform("curJitter", cur_jitter_);
 
     glActiveTexture(GL_TEXTURE0);
     lhs_input_fbo->bindColorbuffer(0);
-    temporal_aa_prgm_->setUniform("curr_color_tex", 0);
+    temporal_aa_prgm_->setUniform("curColorTex", 0);
 
     glActiveTexture(GL_TEXTURE1);
-    fbo_->bindColorbuffer(1);
-    temporal_aa_prgm_->setUniform("prev_color_tex", 1);
+    fbo_->bindColorbuffer(0);
+    temporal_aa_prgm_->setUniform("prevColorTex", 1);
 
     glActiveTexture(GL_TEXTURE2);
     motion_vector_texture->bindTexture();
-    temporal_aa_prgm_->setUniform("motion_vector_tex", 2);
+    temporal_aa_prgm_->setUniform("motionVecTex", 2);
 
     texRead_->bindImage(0, GL_READ_ONLY);
     texWrite_->bindImage(1, GL_WRITE_ONLY);
@@ -197,7 +188,7 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     glUseProgram(0);
 
     lhs_input_fbo->getColorAttachment(0)->copy(
-        lhs_input_fbo->getColorAttachment(0).get(), fbo_->getColorAttachment(1).get());
+        lhs_input_fbo->getColorAttachment(0).get(), fbo_->getColorAttachment(0).get());
     texRead_.swap(texWrite_);
     distTexRead_.swap(distTexWrite_);
 
@@ -205,37 +196,38 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 }
 
 void TemporalAA::setupCamera(core::view::Camera& cam) {
-    float delta_width = 1. / this->resolution_.x;
-    float delta_height = 1. / this->resolution_.y;
+    float delta_width = 1. / resolution_.x;
+    float delta_height = 1. / resolution_.y;
 
-    glm::uint index = this->total_frames_ % this->num_samples_;
+    glm::uint index = total_frames_ % num_samples_;
 
     // same formula as in unreal talk
-    glm::vec2 jitter = glm::vec2((this->halton_sequence_[index].x * 2.0f - 1.0f) * delta_width,
-        (this->halton_sequence_[index].y * 2.0f - 1.0f) * delta_height);
+    glm::vec2 jitter = glm::vec2((halton_sequence_[index].x * 2.0f - 1.0f) * delta_width,
+        (halton_sequence_[index].y * 2.0f - 1.0f) * delta_height);
+    jitter *= halton_scale_;
+
+    prev_jitter_ = cur_jitter_;
+    cur_jitter_ = jitter;
 
     // again compared to Amortization we do nothing with the intrinsics
-    //auto intrinsics = cam.get<core::view::Camera::PerspectiveParameters>();
     auto pose = cam.get<core::view::Camera::Pose>();
 
-    // TODO: Some different implementations additonaly multiply the jitter by a factor (halton_scale_)
-    pose.position += glm::vec3(jitter.x * this->halton_scale_, jitter.y * this->halton_scale_, 0.0f);
+    pose.position += glm::vec3(jitter.x, jitter.y, 0.0f);
 
-    //cam.setOrthographicProjection(intrinsics);
     cam.setPose(pose);
 }
 
 void TemporalAA::setupTextures() {
-    this->fbo_->resize(oldWidth_, oldHeight_);
-    this->texLayout_.width = oldWidth_;
-    this->texLayout_.height = oldHeight_;
+    fbo_->resize(oldWidth_, oldHeight_);
+    texLayout_.width = oldWidth_;
+    texLayout_.height = oldHeight_;
     const std::vector<uint32_t> zeroData(oldWidth_ * oldHeight_, 0); // uin32_t <=> RGBA8.
-    this->texRead_ = std::make_unique<glowl::Texture2D>("texRead", texLayout_, zeroData.data());
-    this->texWrite_ = std::make_unique<glowl::Texture2D>("texWrite", texLayout_, zeroData.data());
+    texRead_ = std::make_unique<glowl::Texture2D>("texRead", texLayout_, zeroData.data());
+    texWrite_ = std::make_unique<glowl::Texture2D>("texWrite", texLayout_, zeroData.data());
 
-    this->distTexLayout_.width = oldWidth_;
-    this->distTexLayout_.height = oldHeight_;
+    distTexLayout_.width = oldWidth_;
+    distTexLayout_.height = oldHeight_;
     const std::vector<float> posInit(2 * oldWidth_ * oldHeight_, std::numeric_limits<float>::lowest()); // RG32F
-    this->distTexRead_ = std::make_unique<glowl::Texture2D>("distTexRead", distTexLayout_, posInit.data());
-    this->distTexWrite_ = std::make_unique<glowl::Texture2D>("distTexWrite", distTexLayout_, posInit.data());
+    distTexRead_ = std::make_unique<glowl::Texture2D>("distTexRead", distTexLayout_, posInit.data());
+    distTexWrite_ = std::make_unique<glowl::Texture2D>("distTexWrite", distTexLayout_, posInit.data());
 }

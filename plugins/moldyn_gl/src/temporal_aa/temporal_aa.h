@@ -81,7 +81,7 @@ private:
     glm::mat4 view_;
     glm::vec2 resolution_;
     glm::vec2 prev_jitter_;
-    glm::vec2 curr_jitter_;
+    glm::vec2 cur_jitter_;
     glm::uint total_frames_;
     int oldWidth_ = -1;
     int oldHeight_ = -1;

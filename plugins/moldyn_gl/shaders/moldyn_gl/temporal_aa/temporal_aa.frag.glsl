@@ -1,9 +1,8 @@
 #version 450
 
-//uniform sampler2D prev_color_tex;
-uniform sampler2D curr_color_tex;
-uniform sampler2D prev_color_tex;
-uniform sampler2D motion_vector_tex;
+uniform sampler2D curColorTex;
+uniform sampler2D prevColorTex;
+uniform sampler2D motionVecTex;
 
 layout(binding=0,rgba8)uniform image2D imgRead;
 layout(binding=1,rgba8)uniform image2D imgWrite;
@@ -15,6 +14,8 @@ uniform mat4 shiftMx;
 uniform vec3 camCenter;
 uniform float camAspect;
 uniform float frustumHeight;
+uniform vec2 prevJitter;
+uniform vec2 curJitter;
 
 in vec2 uvCoords;
 
@@ -23,36 +24,44 @@ out vec4 fragOut;
 void main(){
     const vec2 frustumSize=vec2(frustumHeight*camAspect,frustumHeight);
     
+    // get reprojected position for previous color texture
+    const vec2 unijitterdUV=uvCoords+prevJitter+curJitter;
+    const ivec2 unjitteredImgCoord=ivec2(int(unijitterdUV.x*float(resolution.x)),int(unijitterdUV.y*float(resolution.y)));
+    const vec4 curVelSample=texelFetch(motionVecTex,unjitteredImgCoord,0);
+    const vec2 curVel=vec2(curVelSample.r,curVelSample.g);
+    const vec2 reprojectedUV=uvCoords+curVel;
+    const ivec2 reprojectedImgCoords=ivec2(int(reprojectedUV.x*float(resolution.x)),int(reprojectedUV.y*float(resolution.y)));
+    
     const ivec2 imgCoord=ivec2(int(uvCoords.x*float(resolution.x)),int(uvCoords.y*float(resolution.y)));
     const vec2 posWorldSpace=camCenter.xy+frustumSize*(uvCoords-.5f);
     
-    vec4 prev_color=vec4(0.f);
-    vec4 cur_color=vec4(0.f);
+    vec4 prevColor=vec4(0.f);
+    vec4 curColor=vec4(0.f);
     vec4 color=vec4(0.f);
     
     // Arbitrary out of range numbers
-    vec4 min_color=vec4(9999.f,9999.f,9999.f,1.f);
-    vec4 max_color=vec4(-9999.f,-9999.f,-9999.f,1.f);
+    vec4 minColor=vec4(9999.f,9999.f,9999.f,1.f);
+    vec4 maxColor=vec4(-9999.f,-9999.f,-9999.f,1.f);
     
     // Sample a 3x3 neighborhood to create a box in color space
     for(int x=-1;x<=1;++x)
     {
         for(int y=-1;y<=1;++y)
         {
-            ivec2 cur_coord=imgCoord+ivec2(x,y);
-            vec4 temp_color=texelFetch(curr_color_tex,cur_coord,0);;// Sample neighbor
-            min_color=min(min_color,temp_color);// Take min and max
-            max_color=max(max_color,temp_color);
+            ivec2 curCoord=imgCoord+ivec2(x,y);
+            vec4 tempColor=texelFetch(curColorTex,curCoord,0);;// Sample neighbor
+            minColor=min(minColor,tempColor);// Take min and max
+            maxColor=max(maxColor,tempColor);
         }
     }
     
-    prev_color=texelFetch(prev_color_tex,imgCoord,0);
+    prevColor=texelFetch(prevColorTex,reprojectedImgCoords,0);
     // Clamp previous color to min/max bounding box
-    vec4 previousColorClamped=clamp(prev_color,min_color,max_color);
+    vec4 previousColorClamped=clamp(prevColor,minColor,maxColor);
     
-    cur_color=texelFetch(curr_color_tex,imgCoord,0);
-    float alpha=cur_color.a;
-    color=.1*cur_color+.9*previousColorClamped;
+    curColor=texelFetch(curColorTex,imgCoord,0);
+    float alpha=curColor.a;
+    color=.1*curColor+.9*previousColorClamped;
     color.a=1.f;
     
     imageStore(imgPosWrite,imgCoord,vec4(posWorldSpace,0.f,0.f));
