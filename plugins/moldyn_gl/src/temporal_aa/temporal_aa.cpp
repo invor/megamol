@@ -4,17 +4,28 @@
 #include "halton_sequence.h"
 #include "mmcore/CoreInstance.h"
 
+#include "mmcore/param/FloatParam.h"
+#include "mmcore/param/IntParam.h"
+
 using namespace megamol::moldyn_gl;
 using namespace megamol::compositing_gl;
 
 TemporalAA::TemporalAA(void)
         : core::view::RendererModule<CallRender3DGL, mmstd_gl::ModuleGL>()
         , m_motion_vector_texture_call_("Motion Vectors Texture", "Access motion vector texture texture")
-        , m_dummy_motion_vector_tx_(nullptr) {
+        , m_dummy_motion_vector_tx_(nullptr)
+        , haltonScaleParam("HaltonScale", "Scale factor for camera jitter")
+        , numSamplesParam("NumOfSamples", "Number of samples") {
     m_motion_vector_texture_call_.SetCompatibleCall<CallTexture2DDescription>();
     MakeSlotAvailable(&m_motion_vector_texture_call_);
     MakeSlotAvailable(&chainRenderSlot);
     MakeSlotAvailable(&renderSlot);
+
+    haltonScaleParam << new core::param::FloatParam(1.0, 0.0, 1000.0, 0.5);
+    MakeSlotAvailable(&haltonScaleParam);
+
+    numSamplesParam << new core::param::IntParam(4, 1);
+    MakeSlotAvailable(&numSamplesParam);
 }
 
 TemporalAA::~TemporalAA(void) {
@@ -99,6 +110,9 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 
     int const w = lhs_input_fbo->getWidth();
     int const h = lhs_input_fbo->getHeight();
+
+    halton_scale_ = haltonScaleParam.Param<core::param::FloatParam>()->Value();
+    num_samples_ = numSamplesParam.Param<core::param::IntParam>()->Value();
 
     if (oldWidth_ != w || oldHeight_ != h) {
         oldWidth_ = w;

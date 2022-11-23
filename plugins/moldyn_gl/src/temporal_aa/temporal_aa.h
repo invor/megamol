@@ -62,6 +62,9 @@ protected:
     virtual bool GetExtents(CallRender3DGL& call);
 
 private:
+    core::param::ParamSlot haltonScaleParam;
+    core::param::ParamSlot numSamplesParam;
+
     /** Dummy motion vector texture to use when no texture is connected */
     std::shared_ptr<glowl::Texture2D> m_dummy_motion_vector_tx_;
 
