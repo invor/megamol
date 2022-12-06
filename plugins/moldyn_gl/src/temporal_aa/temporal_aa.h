@@ -8,7 +8,7 @@
 #include "mmcore/Call.h"
 #include "mmcore/CalleeSlot.h"
 #include "mmcore/CallerSlot.h"
-#include "mmcore/CoreInstance.h"
+#include "mmcore/param/ParamSlot.h"
 #include "mmcore_gl/utility/ShaderFactory.h"
 #include "mmstd/renderer/RendererModule.h"
 #include "mmstd_gl/ModuleGL.h"

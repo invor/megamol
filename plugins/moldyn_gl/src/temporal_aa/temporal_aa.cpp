@@ -2,7 +2,6 @@
 
 #include "compositing_gl/CompositingCalls.h"
 #include "halton_sequence.h"
-#include "mmcore/CoreInstance.h"
 
 #include "mmcore/param/FloatParam.h"
 #include "mmcore/param/IntParam.h"
@@ -33,7 +32,8 @@ TemporalAA::~TemporalAA(void) {
 }
 
 bool TemporalAA::create() {
-    auto const shader_options = msf::ShaderFactoryOptionsOpenGL(GetCoreInstance()->GetShaderPaths());
+    auto const shader_options =
+        core::utility::make_path_shader_options(frontend_resources.get<megamol::frontend_resources::RuntimeConfig>());
 
     try {
         temporal_aa_prgm_ = core::utility::make_glowl_shader("temporal_aa", shader_options,
