@@ -3,6 +3,7 @@
 #include "compositing_gl/CompositingCalls.h"
 #include "halton_sequence.h"
 
+#include "mmcore/param/BoolParam.h"
 #include "mmcore/param/FloatParam.h"
 #include "mmcore/param/IntParam.h"
 
@@ -13,18 +14,22 @@ TemporalAA::TemporalAA(void)
         : core::view::RendererModule<CallRender3DGL, mmstd_gl::ModuleGL>()
         , m_motion_vector_texture_call_("Motion Vectors Texture", "Access motion vector texture texture")
         , m_dummy_motion_vector_tx_(nullptr)
-        , haltonScaleParam("HaltonScale", "Scale factor for camera jitter")
-        , numSamplesParam("NumOfSamples", "Number of samples") {
+        , halton_scale_param("HaltonScale", "Scale factor for camera jitter")
+        , num_samples_param("NumOfSamples", "Number of samples")
+        , upscaling_param("Upscaling", "Use upscaling with factor num_samples") {
     m_motion_vector_texture_call_.SetCompatibleCall<CallTexture2DDescription>();
     MakeSlotAvailable(&m_motion_vector_texture_call_);
     MakeSlotAvailable(&chainRenderSlot);
     MakeSlotAvailable(&renderSlot);
 
-    haltonScaleParam << new core::param::FloatParam(1.0, 0.0, 1000.0, 0.5);
-    MakeSlotAvailable(&haltonScaleParam);
+    halton_scale_param << new core::param::FloatParam(1.0, 0.0, 1000.0, 0.5);
+    MakeSlotAvailable(&halton_scale_param);
 
-    numSamplesParam << new core::param::IntParam(4, 1);
-    MakeSlotAvailable(&numSamplesParam);
+    num_samples_param << new core::param::IntParam(4, 1);
+    MakeSlotAvailable(&num_samples_param);
+
+    upscaling_param << new core::param::BoolParam(false);
+    MakeSlotAvailable(&upscaling_param);
 }
 
 TemporalAA::~TemporalAA(void) {
@@ -45,16 +50,14 @@ bool TemporalAA::create() {
 
     fbo_ = std::make_shared<glowl::FramebufferObject>(1, 1);
     fbo_->createColorAttachment(GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
+    old_fbo_ = std::make_shared<glowl::FramebufferObject>(1, 1);
+    old_fbo_->createColorAttachment(GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
 
     // create halton numbers
     for (int iter = 0; iter < 128; iter++) {
         halton_sequence_[iter] =
             glm::vec2(halton::createHaltonNumber(iter + 1, 2), halton::createHaltonNumber(iter + 1, 3));
     }
-
-    halton_scale_ = 1.0f; // TODO: make this variable changeable in megamol UI
-    num_samples_ = 4;     // TODO: make this variable changeable in megamol UI
-    total_frames_ = 0;
 
     // Store texture layout for later resize
     texLayout_ = glowl::TextureLayout(GL_RGBA8, 1, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, 1,
@@ -111,13 +114,17 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     int const w = lhs_input_fbo->getWidth();
     int const h = lhs_input_fbo->getHeight();
 
-    halton_scale_ = haltonScaleParam.Param<core::param::FloatParam>()->Value();
-    num_samples_ = numSamplesParam.Param<core::param::IntParam>()->Value();
+    halton_scale_ = halton_scale_param.Param<core::param::FloatParam>()->Value();
+    num_samples_ = num_samples_param.Param<core::param::IntParam>()->Value();
+    upscaling_ = upscaling_param.Param<core::param::BoolParam>()->Value();
+    frames_++;
 
-    if (oldWidth_ != w || oldHeight_ != h) {
+    if (oldWidth_ != w || oldHeight_ != h || old_num_samples_ != num_samples_ || old_upscaling_ != upscaling_) {
+        old_upscaling_ = upscaling_;
+        old_num_samples_ = num_samples_;
         oldWidth_ = w;
         oldHeight_ = h;
-        setupTextures();
+        updateParams();
     }
 
     // pass through variables
@@ -133,13 +140,16 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 
     view_ = cam.getViewMatrix();
     resolution_ = glm::vec2(lhs_input_fbo->getWidth(), lhs_input_fbo->getHeight());
-    total_frames_++;
+
+    fbo_->bind();
+    glClearColor(bg.r * bg.a, bg.g * bg.a, bg.b * bg.a, bg.a);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // now jitter the camera
     auto jittered_cam = cam;
     setupCamera(jittered_cam);
 
-    rhs_chained_call->SetFramebuffer(lhs_input_fbo);
+    rhs_chained_call->SetFramebuffer(fbo_);
     rhs_chained_call->SetCamera(jittered_cam);
 
     (*rhs_chained_call)(core::view::AbstractCallRender::FnRender);
@@ -157,7 +167,7 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     }
 
     // in first frame just use the same colorbuffer
-    if (total_frames_ == 1) {
+    if (frames_ == 1) {
         lhs_input_fbo->getColorAttachment(0)->copy(
             lhs_input_fbo->getColorAttachment(0).get(), fbo_->getColorAttachment(0).get());
     }
@@ -181,11 +191,11 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     temporal_aa_prgm_->setUniform("curJitter", cur_jitter_);
 
     glActiveTexture(GL_TEXTURE0);
-    lhs_input_fbo->bindColorbuffer(0);
+    fbo_->bindColorbuffer(0);
     temporal_aa_prgm_->setUniform("curColorTex", 0);
 
     glActiveTexture(GL_TEXTURE1);
-    fbo_->bindColorbuffer(0);
+    old_fbo_->bindColorbuffer(0);
     temporal_aa_prgm_->setUniform("prevColorTex", 1);
 
     glActiveTexture(GL_TEXTURE2);
@@ -201,8 +211,7 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 
     glUseProgram(0);
 
-    lhs_input_fbo->getColorAttachment(0)->copy(
-        lhs_input_fbo->getColorAttachment(0).get(), fbo_->getColorAttachment(0).get());
+    fbo_->getColorAttachment(0)->copy(fbo_->getColorAttachment(0).get(), old_fbo_->getColorAttachment(0).get());
     texRead_.swap(texWrite_);
     distTexRead_.swap(distTexWrite_);
 
@@ -210,29 +219,60 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 }
 
 void TemporalAA::setupCamera(core::view::Camera& cam) {
-    float delta_width = 1. / resolution_.x;
-    float delta_height = 1. / resolution_.y;
+    glm::vec2 jitter;
 
-    glm::uint index = total_frames_ % num_samples_;
+    // jitter similar to ImageSpaceAmortization when upscaling, else jitter with the halton sequence
+    if (upscaling_) {
+        samplingSequencePosition_ = (samplingSequencePosition_ + 1) % (num_samples_ * num_samples_);
+        frameIdx_ = samplingSequence_[samplingSequencePosition_];
 
-    // same formula as in unreal talk
-    glm::vec2 jitter = glm::vec2((halton_sequence_[index].x * 2.0f - 1.0f) * delta_width,
-        (halton_sequence_[index].y * 2.0f - 1.0f) * delta_height);
-    jitter *= halton_scale_;
+        auto intrinsics = cam.get<core::view::Camera::PerspectiveParameters>();
+        const float aspect = intrinsics.aspect.value();
+        const float frustum_height = glm::tan(intrinsics.fovy * 0.5f) * 2.0f;
+        const float frustum_width = aspect * frustum_height;
+        float wOffs = 0.5f * frustum_width * camOffsets_[frameIdx_].x;
+        float hOffs = 0.5f * frustum_height * camOffsets_[frameIdx_].y;
+
+        const int low_res_width = (resolution_.x + num_samples_ - 1) / num_samples_;
+        const int low_res_height = (resolution_.y + num_samples_ - 1) / num_samples_;
+
+        const float wAdj = static_cast<float>(low_res_width * num_samples_) / static_cast<float>(resolution_.x);
+        const float hAdj = static_cast<float>(low_res_height * num_samples_) / static_cast<float>(resolution_.y);
+
+        wOffs += 0.5f * (wAdj - 1.0f) * frustum_width;
+        hOffs += 0.5f * (hAdj - 1.0f) * frustum_height;
+        jitter = glm::vec2(wOffs, hOffs);
+
+        // TODO: is this right?
+        intrinsics.fovy = 2.0f * glm::atan((frustum_height * hAdj) / 2.0f);
+        intrinsics.aspect = wAdj / hAdj * aspect;
+        cam.setPerspectiveProjection(intrinsics);
+    } else {
+        samplingSequencePosition_ = (samplingSequencePosition_ + 1) % num_samples_;
+        float delta_width = 1. / resolution_.x;
+        float delta_height = 1. / resolution_.y;
+
+        // same formula as in unreal talk
+        jitter = glm::vec2((halton_sequence_[samplingSequencePosition_].x * 2.0f - 1.0f) * delta_width,
+            (halton_sequence_[samplingSequencePosition_].y * 2.0f - 1.0f) * delta_height);
+        jitter *= halton_scale_;
+    }
 
     prev_jitter_ = cur_jitter_;
     cur_jitter_ = jitter;
 
-    // again compared to Amortization we do nothing with the intrinsics
     auto pose = cam.get<core::view::Camera::Pose>();
-
     pose.position += glm::vec3(jitter.x, jitter.y, 0.0f);
-
     cam.setPose(pose);
 }
 
-void TemporalAA::setupTextures() {
+void TemporalAA::updateParams() {
+    // TODO: update fbo etc. with new num_samples and upscaling on
+
     fbo_->resize(oldWidth_, oldHeight_);
+    old_fbo_->resize(oldWidth_, oldHeight_);
+    samplingSequencePosition_ = 0;
+
     texLayout_.width = oldWidth_;
     texLayout_.height = oldHeight_;
     const std::vector<uint32_t> zeroData(oldWidth_ * oldHeight_, 0); // uin32_t <=> RGBA8.
