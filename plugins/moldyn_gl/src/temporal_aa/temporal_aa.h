@@ -58,17 +58,21 @@ protected:
     virtual void release();
     virtual bool Render(CallRender3DGL& call);
     virtual void setupCamera(core::view::Camera& cam);
-    virtual void updateParams();
+    virtual bool updateParams();
     virtual bool GetExtents(CallRender3DGL& call);
 
+
 private:
+    enum ScalingMode { NONE = 0, AMORTIZATION = 1, CBR = 2 };
+
     core::param::ParamSlot halton_scale_param;
     core::param::ParamSlot num_samples_param;
-    core::param::ParamSlot upscaling_param;
+    core::param::ParamSlot scaling_mode_param;
 
     std::shared_ptr<glowl::FramebufferObject> fbo_;
     std::shared_ptr<glowl::FramebufferObject> old_fbo_; // save the previous color
     std::shared_ptr<glowl::GLSLProgram> temporal_aa_prgm_;
+    std::unique_ptr<msf::ShaderFactoryOptionsOpenGL> shader_options_flags_;
     glowl::TextureLayout texLayout_;
     glowl::TextureLayout distTexLayout_;
     std::unique_ptr<glowl::Texture2D> texRead_;
@@ -93,8 +97,8 @@ private:
     glm::uint
         num_samples_; // either the rotation of the halton_sequence or the upscaling factor (when upscaling turned on)
     glm::uint old_num_samples_;
-    bool upscaling_ = false;
-    bool old_upscaling_ = false;
+    ScalingMode scaling_mode_ = ScalingMode::NONE;
+    ScalingMode old_scaling_mode_ = ScalingMode::NONE;
     int frameIdx_ = 0;
     int samplingSequencePosition_;
 
@@ -107,6 +111,11 @@ private:
     // halton variables
     glm::vec2 halton_sequence_[128];
     float halton_scale_;
+
+    /**
+     * Return specified render mode as human readable string.
+     */
+    static std::string getScalingModeString(ScalingMode sm);
 };
 } // namespace moldyn_gl
 } // namespace megamol
