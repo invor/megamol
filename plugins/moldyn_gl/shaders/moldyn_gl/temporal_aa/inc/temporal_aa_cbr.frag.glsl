@@ -34,14 +34,12 @@ void main(){
     vec4 minColor=vec4(9999.f,9999.f,9999.f,1.f);
     vec4 maxColor=vec4(-9999.f,-9999.f,-9999.f,1.f);
     
-    curColor=texelFetch(curColorTex,lowResImgCoord,0);
-    
     // Checkerboard rendering resolve
     if((samplingSequencePosition==0&&imgCoord.y%2==0)||(samplingSequencePosition==1&&imgCoord.y%2==1)){
         curColor=texelFetch(curColorTex,lowResImgCoord,0);
     }else{
         //TODO: reprojection at top
-        curColor=imageLoad(imgRead,imgCoord);
+        //curColor=imageLoad(imgRead,imgCoord);
         curColor=texelFetch(prevColorTex,lowResImgCoord,0);
     }
     
@@ -78,5 +76,5 @@ void main(){
     color=.1*curColor+.9*previousColorClamped;
     
     imageStore(imgWrite,imgCoord,color);
-    fragOut=curColor;
+    fragOut=color;
 }
