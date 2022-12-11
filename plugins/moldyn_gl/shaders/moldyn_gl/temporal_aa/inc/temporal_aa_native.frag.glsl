@@ -1,6 +1,8 @@
 uniform sampler2D curColorTex;
-uniform sampler2D prevColorTex;
 uniform sampler2D motionVecTex;
+
+layout(rgba8)uniform image2D prevColorRead;
+layout(rgba8)uniform image2D prevColorWrite;
 
 layout(binding=0,rgba8)uniform image2D imgRead;
 layout(binding=1,rgba8)uniform image2D imgWrite;
@@ -57,12 +59,13 @@ void main(){
     
     vec4 prevColor=vec4(0.f);
     
-    prevColor=texelFetch(prevColorTex,reprojectedImgCoords,0);
+    prevColor=imageLoad(prevColorRead,reprojectedImgCoords);
     // Clamp previous color to min/max bounding box
     vec4 previousColorClamped=clamp(prevColor,minColor,maxColor);
     
     color=.1*curColor+.9*previousColorClamped;
     
     imageStore(imgWrite,imgCoord,color);
+    imageStore(prevColorWrite,imgCoord,color);
     fragOut=color;
 }

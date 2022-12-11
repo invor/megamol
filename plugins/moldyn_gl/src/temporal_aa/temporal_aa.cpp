@@ -31,7 +31,8 @@ TemporalAA::TemporalAA(void)
     core::param::EnumParam* rmp = new core::param::EnumParam(scaling_mode_);
     rmp->SetTypePair(ScalingMode::NONE, getScalingModeString(ScalingMode::NONE).c_str());
     rmp->SetTypePair(ScalingMode::AMORTIZATION, getScalingModeString(ScalingMode::AMORTIZATION).c_str());
-    rmp->SetTypePair(ScalingMode::CBR, getScalingModeString(ScalingMode::CBR).c_str());
+    rmp->SetTypePair(ScalingMode::CBR_W_TAA, getScalingModeString(ScalingMode::CBR_W_TAA).c_str());
+    rmp->SetTypePair(ScalingMode::CBR_WO_TAA, getScalingModeString(ScalingMode::CBR_WO_TAA).c_str());
     scaling_mode_param << rmp;
     MakeSlotAvailable(&scaling_mode_param);
 }
@@ -87,6 +88,8 @@ bool TemporalAA::create() {
 
     texRead_ = std::make_unique<glowl::Texture2D>("texStoreA", texLayout_, nullptr);
     texWrite_ = std::make_unique<glowl::Texture2D>("texStoreB", texLayout_, nullptr);
+    old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", texLayout_, nullptr);
+    old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", texLayout_, nullptr);
     distTexRead_ = std::make_unique<glowl::Texture2D>("distTexR", distTexLayout_, nullptr);
     distTexWrite_ = std::make_unique<glowl::Texture2D>("distTexW", distTexLayout_, nullptr);
     return true;
@@ -151,12 +154,15 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 
     fbo_->bind();
     glClearColor(bg.r * bg.a, bg.g * bg.a, bg.b * bg.a, bg.a);
+    glClearDepth(1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     // now jitter the camera
     auto jittered_cam = cam;
     setupCamera(jittered_cam);
 
+    //rhs_chained_call->SetViewResolution({fbo_->getWidth(), fbo_->getHeight()});
     rhs_chained_call->SetFramebuffer(fbo_);
     rhs_chained_call->SetCamera(jittered_cam);
 
@@ -176,7 +182,7 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 
     // in first frame just use the same colorbuffer
     if (frames_ == 1) {
-        fbo_->getColorAttachment(0)->copy(fbo_->getColorAttachment(0).get(), old_fbo_->getColorAttachment(0).get());
+        //fbo_->getColorAttachment(0)->copy(fbo_->getColorAttachment(0).get(), old_fbo_->getColorAttachment(0).get());
     }
 
     glViewport(0, 0, w, h);
@@ -206,8 +212,12 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     temporal_aa_prgm_->setUniform("curColorTex", 0);
 
     glActiveTexture(GL_TEXTURE1);
-    old_fbo_->bindColorbuffer(0);
-    temporal_aa_prgm_->setUniform("prevColorTex", 1);
+    old_lowres_color_read_->bindImage(0, GL_READ_ONLY);
+    temporal_aa_prgm_->setUniform("prevColorRead", 1);
+
+    glActiveTexture(GL_TEXTURE3);
+    old_lowres_color_write_->bindImage(0, GL_WRITE_ONLY);
+    temporal_aa_prgm_->setUniform("prevColorWrite", 3);
 
     glActiveTexture(GL_TEXTURE2);
     motion_vector_texture->bindTexture();
@@ -222,9 +232,9 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 
     glUseProgram(0);
 
-    fbo_->getColorAttachment(0)->copy(fbo_->getColorAttachment(0).get(), old_fbo_->getColorAttachment(0).get());
     texRead_.swap(texWrite_);
     distTexRead_.swap(distTexWrite_);
+    old_lowres_color_read_.swap(old_lowres_color_write_);
 
     return true;
 }
@@ -259,7 +269,7 @@ void TemporalAA::setupCamera(core::view::Camera& cam) {
         intrinsics.aspect = wAdj / hAdj * aspect;
         cam.setPerspectiveProjection(intrinsics);
 
-    } else if (scaling_mode_ == ScalingMode::CBR) {
+    } else if (scaling_mode_ == ScalingMode::CBR_W_TAA || scaling_mode_ == ScalingMode::CBR_WO_TAA) {
         samplingSequencePosition_ = (samplingSequencePosition_ + 1) % (2);
         jitter = glm::vec2(camOffsets_[samplingSequencePosition_].x, 0.f);
 
@@ -328,8 +338,21 @@ bool TemporalAA::updateParams() {
         }
 
         frameIdx_ = samplingSequence_[samplingSequencePosition_];
-    } else if (scaling_mode_ == ScalingMode::CBR) {
+
+        auto layout = texLayout_;
+        layout.width = (oldWidth_ + num_samples_ - 1) / num_samples_;
+        layout.height = (oldHeight_ + num_samples_ - 1) / num_samples_;
+        const std::vector<uint32_t> zero_data(
+            ((oldWidth_ + num_samples_ - 1) / num_samples_) * ((oldHeight_ + num_samples_ - 1) / num_samples_), 0);
+        old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", layout, zero_data.data());
+        old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", layout, zero_data.data());
+
+    } else if (scaling_mode_ == ScalingMode::CBR_WO_TAA || scaling_mode_ == ScalingMode::CBR_W_TAA) {
         shader_options_flags_->addDefinition("CBR");
+        if (scaling_mode_ == ScalingMode::CBR_W_TAA) {
+            shader_options_flags_->addDefinition("TAA");
+        }
+
 
         fbo_->resize(oldWidth_ / 2, oldHeight_);
         old_fbo_->resize(oldWidth_ / 2, oldHeight_);
@@ -340,10 +363,23 @@ bool TemporalAA::updateParams() {
             camOffsets_[j] = glm::vec3(x, 0.0f, 0.0f);
         }
 
+        auto layout = texLayout_;
+        layout.width = oldWidth_ / 2;
+        layout.height = oldHeight_;
+        const std::vector<uint32_t> zero_data((oldWidth_ / 2) * oldHeight_, 0);
+        old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", layout, zero_data.data());
+        old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", layout, zero_data.data());
+
     } else {
         shader_options_flags_->addDefinition("NONE");
         fbo_->resize(oldWidth_, oldHeight_);
-        old_fbo_->resize(oldWidth_, oldHeight_);
+
+        auto layout = texLayout_;
+        layout.width = oldWidth_;
+        layout.height = oldHeight_;
+        const std::vector<uint32_t> zero_data(oldWidth_ * oldHeight_, 0);
+        old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", layout, zero_data.data());
+        old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", layout, zero_data.data());
     }
 
     viewProjMx_ = glm::mat4(1.0f);
@@ -354,6 +390,7 @@ bool TemporalAA::updateParams() {
     const std::vector<uint32_t> zeroData(oldWidth_ * oldHeight_, 0); // uin32_t <=> RGBA8.
     texRead_ = std::make_unique<glowl::Texture2D>("texRead", texLayout_, zeroData.data());
     texWrite_ = std::make_unique<glowl::Texture2D>("texWrite", texLayout_, zeroData.data());
+
 
     distTexLayout_.width = oldWidth_;
     distTexLayout_.height = oldHeight_;
@@ -383,8 +420,11 @@ std::string TemporalAA::getScalingModeString(ScalingMode sm) {
     case (ScalingMode::AMORTIZATION):
         mode = "Amortization";
         break;
-    case (ScalingMode::CBR):
-        mode = "Checkerboard-Rendering";
+    case (ScalingMode::CBR_WO_TAA):
+        mode = "Checkerboard-Rendering without TAA";
+        break;
+    case (ScalingMode::CBR_W_TAA):
+        mode = "Checkerboard-Rendering with TAA";
         break;
     default:
         mode = "unknown";

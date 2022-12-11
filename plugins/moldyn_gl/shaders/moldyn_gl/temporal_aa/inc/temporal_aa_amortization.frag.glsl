@@ -1,6 +1,8 @@
 uniform sampler2D curColorTex;
-uniform sampler2D prevColorTex;
 uniform sampler2D motionVecTex;
+
+layout(rgba8)uniform image2D prevColorRead;
+layout(rgba8)uniform image2D prevColorWrite;
 
 layout(binding=0,rgba8)uniform image2D imgRead;
 layout(binding=1,rgba8)uniform image2D imgWrite;
@@ -61,22 +63,30 @@ vec2 readPosition(ivec2 coords){
 }
 
 void main(){
-    const ivec2 imgCoordCache=ivec2(int(uvCoords.x*float(resolution.x)),int(uvCoords.y*float(resolution.y)));
-    const ivec2 quadCoordCache=imgCoordCache%numSamples;// Position within the current a*a quad on the high res texture.
-    const int idx=(numSamples*quadCoordCache.y+quadCoordCache.x);// Linear version of quadCoord as as frame id.
+    const vec2 frustumSize=vec2(frustumHeight*camAspect,frustumHeight);
+    const ivec2 imgCoord=ivec2(int(uvCoords.x*float(resolution.x)),int(uvCoords.y*float(resolution.y)));
+    const ivec2 lowResImgCoord=ivec2(int(uvCoords.x*float(lowResResolution.x)),int(uvCoords.y*float(lowResResolution.y)));
+    const vec2 posWorldSpace=camCenter.xy+frustumSize*(uvCoords-.5f);
+    
+    vec4 color=vec4(0.f);
+    vec4 curColor=vec4(0.f);
+    
+    // Arbitrary out of range numbers
+    vec4 minColor=vec4(9999.f,9999.f,9999.f,1.f);
+    vec4 maxColor=vec4(-9999.f,-9999.f,-9999.f,1.f);
+    
+    const ivec2 quadCoord=imgCoord%numSamples;// Position within the current a*a quad on the high res texture.
+    const int idx=(numSamples*quadCoord.y+quadCoord.x);// Linear version of quadCoord as as frame id.
     
     if(frameIdx==idx){
-        #include "moldyn_gl/temporal_aa/inc/temporal_aa_defines.inc.glsl"
         // Current high res pixel matches exactly the low res pixel of the current pass.
         curColor=texelFetch(curColorTex,lowResImgCoord,0);
         
         imageStore(imgPosWrite,imgCoord,vec4(posWorldSpace,0.f,0.f));
-        
-        #include "moldyn_gl/temporal_aa/inc/temporal_aa_pass.inc.glsl"
     }else{
-        #include "moldyn_gl/temporal_aa/inc/temporal_aa_defines.inc.glsl"
-        const ivec2 quadCoord=imgCoord%numSamples;
-        // TODO: This has to be done with motion vectors, since our objects our moving
+        /*
+        // TODO: This has to be done with motion vectors, since our objects are moving
+        
         // Find shifted image coords. This is where the current high res position was in the previous frame.
         const vec4 posClipSpace=vec4(2.f*uvCoords-1.f,0.f,1.f);
         const vec4 lastPosClipSpace=shiftMx*posClipSpace;
@@ -104,14 +114,48 @@ void main(){
         if(distNewSample<=distOldSample){
             curColor=texelFetch(curColorTex,jittLowResImgCoord,0);
             imageStore(imgPosWrite,imgCoord,vec4(samplePosWorldSpace,0.f,0.f));
-            #include "moldyn_gl/temporal_aa/inc/temporal_aa_pass.inc.glsl"
         }else{
             curColor=imageLoad(imgRead,lastImgCoord);// If this sample is nearer the coords should be within the bounds.
             imageStore(imgPosWrite,imgCoord,vec4(lastPosWorldSpace,0.f,0.f));
-            #include "moldyn_gl/temporal_aa/inc/temporal_aa_pass.inc.glsl"
         }
+        */
+        curColor=texelFetch(curColorTex,lowResImgCoord,0);
+        
+        imageStore(imgPosWrite,imgCoord,vec4(posWorldSpace,0.f,0.f));
     }
     
     // TODO: upscale code from Amortization here
+    /*
+    // Sample a 2x2 neighborhood to create a box in color space
+    for(int x=-1;x<=1;++x)
+    {
+        for(int y=-1;y<=1;++y)
+        {
+            ivec2 curCoord=lowResImgCoord+ivec2(x,y);
+            vec4 tempColor=texelFetch(curColorTex,curCoord,0);// Sample neighbor
+            minColor=min(minColor,tempColor);// Take min and max
+            maxColor=max(maxColor,tempColor);
+        }
+    }
     
+    // get reprojected position for previous color texture
+    const vec2 unijitterdUV=uvCoords-prevJitter-curJitter;
+    const ivec2 unjitteredImgCoord=ivec2(int(unijitterdUV.x*float(lowResResolution.x)),int(unijitterdUV.y*float(lowResResolution.y)));
+    const vec4 curVelSample=texelFetch(motionVecTex,unjitteredImgCoord,0);
+    const vec2 curVel=vec2(curVelSample.r,curVelSample.g);
+    const vec2 reprojectedUV=uvCoords+curVel;
+    const ivec2 reprojectedImgCoords=ivec2(int(reprojectedUV.x*float(lowResResolution.x)),int(reprojectedUV.y*float(lowResResolution.y)));
+    
+    vec4 prevColor=vec4(0.f);
+    
+    prevColor=imageLoad(imgRead,reprojectedImgCoords);
+    // Clamp previous color to min/max bounding box
+    vec4 previousColorClamped=clamp(prevColor,minColor,maxColor);
+    
+    color=.1*curColor+.9*previousColorClamped;
+    */
+    
+    imageStore(imgWrite,imgCoord,curColor);
+    imageStore(prevColorWrite,lowResImgCoord,curColor);
+    fragOut=curColor;
 }

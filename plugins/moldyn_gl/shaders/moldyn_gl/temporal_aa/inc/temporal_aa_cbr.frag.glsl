@@ -1,6 +1,8 @@
 uniform sampler2D curColorTex;
-uniform sampler2D prevColorTex;
 uniform sampler2D motionVecTex;
+
+layout(rgba8)uniform image2D prevColorRead;
+layout(rgba8)uniform image2D prevColorWrite;
 
 layout(binding=0,rgba8)uniform image2D imgRead;
 layout(binding=1,rgba8)uniform image2D imgWrite;
@@ -39,12 +41,12 @@ void main(){
         curColor=texelFetch(curColorTex,lowResImgCoord,0);
     }else{
         //TODO: reprojection at top
-        //curColor=imageLoad(imgRead,imgCoord);
-        curColor=texelFetch(prevColorTex,lowResImgCoord,0);
+        curColor=imageLoad(imgRead,imgCoord);
     }
     
     imageStore(imgPosWrite,imgCoord,vec4(posWorldSpace,0.f,0.f));
     
+    #ifdef TAA
     // Sample a 3x3 neighborhood to create a box in color space
     for(int x=-1;x<=1;++x)
     {
@@ -76,5 +78,11 @@ void main(){
     color=.1*curColor+.9*previousColorClamped;
     
     imageStore(imgWrite,imgCoord,color);
+    imageStore(prevColorWrite,lowResImgCoord,curColor);
     fragOut=color;
+    #else
+    imageStore(imgWrite,imgCoord,curColor);
+    imageStore(prevColorWrite,lowResImgCoord,curColor);
+    fragOut=curColor;
+    #endif
 }

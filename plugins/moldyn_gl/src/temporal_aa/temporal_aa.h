@@ -63,7 +63,7 @@ protected:
 
 
 private:
-    enum ScalingMode { NONE = 0, AMORTIZATION = 1, CBR = 2 };
+    enum ScalingMode { NONE = 0, AMORTIZATION = 1, CBR_WO_TAA = 2, CBR_W_TAA };
 
     core::param::ParamSlot halton_scale_param;
     core::param::ParamSlot num_samples_param;
@@ -79,6 +79,8 @@ private:
     std::unique_ptr<glowl::Texture2D> texWrite_;
     std::unique_ptr<glowl::Texture2D> distTexRead_;
     std::unique_ptr<glowl::Texture2D> distTexWrite_;
+    std::unique_ptr<glowl::Texture2D> old_lowres_color_read_;
+    std::unique_ptr<glowl::Texture2D> old_lowres_color_write_;
 
     /** Dummy motion vector texture to use when no texture is connected */
     std::shared_ptr<glowl::Texture2D> m_dummy_motion_vector_tx_;
