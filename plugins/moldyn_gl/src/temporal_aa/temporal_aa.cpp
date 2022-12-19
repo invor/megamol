@@ -30,7 +30,6 @@ TemporalAA::TemporalAA(void)
 
     core::param::EnumParam* rmp = new core::param::EnumParam(scaling_mode_);
     rmp->SetTypePair(ScalingMode::NONE, getScalingModeString(ScalingMode::NONE).c_str());
-    rmp->SetTypePair(ScalingMode::AMORTIZATION, getScalingModeString(ScalingMode::AMORTIZATION).c_str());
     rmp->SetTypePair(ScalingMode::CBR_W_TAA, getScalingModeString(ScalingMode::CBR_W_TAA).c_str());
     rmp->SetTypePair(ScalingMode::CBR_WO_TAA, getScalingModeString(ScalingMode::CBR_WO_TAA).c_str());
     scaling_mode_param << rmp;
@@ -242,34 +241,7 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 void TemporalAA::setupCamera(core::view::Camera& cam) {
     glm::vec2 jitter;
 
-    // jitter similar to ImageSpaceAmortization when upscaling, else jitter with the halton sequence
-    if (scaling_mode_ == ScalingMode::AMORTIZATION) {
-        samplingSequencePosition_ = (samplingSequencePosition_ + 1) % (num_samples_ * num_samples_);
-        frameIdx_ = samplingSequence_[samplingSequencePosition_];
-
-        auto intrinsics = cam.get<core::view::Camera::PerspectiveParameters>();
-        const float aspect = intrinsics.aspect.value();
-        const float frustum_height = glm::tan(intrinsics.fovy * 0.5f) * 2.0f;
-        const float frustum_width = aspect * frustum_height;
-        float wOffs = 0.5f * frustum_width * camOffsets_[frameIdx_].x;
-        float hOffs = 0.5f * frustum_height * camOffsets_[frameIdx_].y;
-
-        const int low_res_width = (resolution_.x + num_samples_ - 1) / num_samples_;
-        const int low_res_height = (resolution_.y + num_samples_ - 1) / num_samples_;
-
-        const float wAdj = static_cast<float>(low_res_width * num_samples_) / static_cast<float>(resolution_.x);
-        const float hAdj = static_cast<float>(low_res_height * num_samples_) / static_cast<float>(resolution_.y);
-
-        wOffs += 0.5f * (wAdj - 1.0f) * frustum_width;
-        hOffs += 0.5f * (hAdj - 1.0f) * frustum_height;
-        jitter = glm::vec2(wOffs, hOffs);
-
-        // TODO: is this right?
-        intrinsics.fovy = 2.0f * glm::atan((frustum_height * hAdj) / 2.0f);
-        intrinsics.aspect = wAdj / hAdj * aspect;
-        cam.setPerspectiveProjection(intrinsics);
-
-    } else if (scaling_mode_ == ScalingMode::CBR_W_TAA || scaling_mode_ == ScalingMode::CBR_WO_TAA) {
+    if (scaling_mode_ == ScalingMode::CBR_W_TAA || scaling_mode_ == ScalingMode::CBR_WO_TAA) {
         samplingSequencePosition_ = (samplingSequencePosition_ + 1) % (2);
         jitter = glm::vec2(camOffsets_[samplingSequencePosition_].x, 0.f);
 
@@ -298,56 +270,7 @@ bool TemporalAA::updateParams() {
         core::utility::make_path_shader_options(frontend_resources.get<megamol::frontend_resources::RuntimeConfig>());
     shader_options_flags_ = std::make_unique<msf::ShaderFactoryOptionsOpenGL>(shader_options);
 
-    if (scaling_mode_ == ScalingMode::AMORTIZATION) {
-        shader_options_flags_->addDefinition("AMORTIZATION");
-
-        fbo_->resize((oldWidth_ + num_samples_ - 1) / num_samples_, (oldHeight_ + num_samples_ - 1) / num_samples_);
-        old_fbo_->resize((oldWidth_ + num_samples_ - 1) / num_samples_, (oldHeight_ + num_samples_ - 1) / num_samples_);
-        camOffsets_.resize(num_samples_ * num_samples_);
-
-        for (int j = 0; j < num_samples_; j++) {
-            for (int i = 0; i < num_samples_; i++) {
-                const float x = static_cast<float>(2 * i - num_samples_ + 1) / static_cast<float>(oldWidth_);
-                const float y = static_cast<float>(2 * j - num_samples_ + 1) / static_cast<float>(oldHeight_);
-                camOffsets_[j * num_samples_ + i] = glm::vec3(x, y, 0.0f);
-            }
-        }
-
-        samplingSequence_.clear();
-
-        const int nextPowerOfTwoExp = static_cast<int>(std::ceil(std::log2(num_samples_)));
-        const int nextPowerOfTwoVal = static_cast<int>(std::pow(2, nextPowerOfTwoExp));
-
-        std::array<std::array<int, 2>, 4> offsetPattern{{{0, 0}, {1, 1}, {0, 1}, {1, 0}}};
-        std::vector<int> offsetLength(nextPowerOfTwoExp, 0);
-        for (int i = 0; i < nextPowerOfTwoExp; i++) {
-            offsetLength[i] = static_cast<int>(std::pow(2, nextPowerOfTwoExp - i - 1));
-        }
-
-        for (int i = 0; i < nextPowerOfTwoVal * nextPowerOfTwoVal; i++) {
-            int x = 0;
-            int y = 0;
-            for (int j = 0; j < nextPowerOfTwoExp; j++) {
-                const int levelIndex = (i / static_cast<int>(std::pow(4, j))) % 4;
-                x += offsetPattern[levelIndex][0] * offsetLength[j];
-                y += offsetPattern[levelIndex][1] * offsetLength[j];
-            }
-            if (x < num_samples_ && y < num_samples_) {
-                samplingSequence_.push_back(x + y * num_samples_);
-            }
-        }
-
-        frameIdx_ = samplingSequence_[samplingSequencePosition_];
-
-        auto layout = texLayout_;
-        layout.width = (oldWidth_ + num_samples_ - 1) / num_samples_;
-        layout.height = (oldHeight_ + num_samples_ - 1) / num_samples_;
-        const std::vector<uint32_t> zero_data(
-            ((oldWidth_ + num_samples_ - 1) / num_samples_) * ((oldHeight_ + num_samples_ - 1) / num_samples_), 0);
-        old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", layout, zero_data.data());
-        old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", layout, zero_data.data());
-
-    } else if (scaling_mode_ == ScalingMode::CBR_WO_TAA || scaling_mode_ == ScalingMode::CBR_W_TAA) {
+    if (scaling_mode_ == ScalingMode::CBR_WO_TAA || scaling_mode_ == ScalingMode::CBR_W_TAA) {
         shader_options_flags_->addDefinition("CBR");
         if (scaling_mode_ == ScalingMode::CBR_W_TAA) {
             shader_options_flags_->addDefinition("TAA");
@@ -416,9 +339,6 @@ std::string TemporalAA::getScalingModeString(ScalingMode sm) {
     switch (sm) {
     case (ScalingMode::NONE):
         mode = "None";
-        break;
-    case (ScalingMode::AMORTIZATION):
-        mode = "Amortization";
         break;
     case (ScalingMode::CBR_WO_TAA):
         mode = "Checkerboard-Rendering without TAA";

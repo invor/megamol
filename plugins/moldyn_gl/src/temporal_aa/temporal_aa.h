@@ -63,7 +63,7 @@ protected:
 
 
 private:
-    enum ScalingMode { NONE = 0, AMORTIZATION = 1, CBR_WO_TAA = 2, CBR_W_TAA };
+    enum ScalingMode { NONE = 0, CBR_WO_TAA = 1, CBR_W_TAA = 2 };
 
     core::param::ParamSlot halton_scale_param;
     core::param::ParamSlot num_samples_param;
