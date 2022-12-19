@@ -359,7 +359,7 @@ bool TemporalAA::updateParams() {
         camOffsets_.resize(2);
 
         for (int j = 0; j < 2; j++) {
-            const float x = static_cast<float>(2 * j - 2 + 1) / static_cast<float>(oldWidth_);
+            const float x = static_cast<float>(2 * j - 2 + 1) / (2 * static_cast<float>(oldWidth_));
             camOffsets_[j] = glm::vec3(x, 0.0f, 0.0f);
         }
 

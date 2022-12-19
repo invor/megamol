@@ -47,16 +47,19 @@ void main(){
     imageStore(imgPosWrite,imgCoord,vec4(posWorldSpace,0.f,0.f));
     
     #ifdef TAA
-    // Sample a 3x3 neighborhood to create a box in color space
-    for(int x=-1;x<=1;++x)
+    // Sample a 2x2 neighborhood to create a box in color space
+    // compared to normal TAA just 2x2 because of lower resolution (this produces smoother edges compared too using 3x3)
+    for(int x=-1;x<=0;++x)
     {
-        for(int y=-1;y<=1;++y)
-        {
-            ivec2 curCoord=lowResImgCoord+ivec2(x,y);
-            vec4 tempColor=texelFetch(curColorTex,curCoord,0);// Sample neighbor
-            minColor=min(minColor,tempColor);// Take min and max
-            maxColor=max(maxColor,tempColor);
-        }
+        ivec2 curCoord=lowResImgCoord+ivec2(x,x+1);
+        vec4 tempColor=texelFetch(curColorTex,curCoord,0);// Sample neighbor
+        minColor=min(minColor,tempColor);// Take min and max
+        maxColor=max(maxColor,tempColor);
+        
+        curCoord=lowResImgCoord+ivec2(x+1,x);
+        tempColor=texelFetch(curColorTex,curCoord,0);// Sample neighbor
+        minColor=min(minColor,tempColor);// Take min and max
+        maxColor=max(maxColor,tempColor);
     }
     
     // TAA resolve
@@ -78,7 +81,7 @@ void main(){
     color=.1*curColor+.9*previousColorClamped;
     
     imageStore(imgWrite,imgCoord,color);
-    imageStore(prevColorWrite,lowResImgCoord,curColor);
+    imageStore(prevColorWrite,lowResImgCoord,color);
     fragOut=color;
     #else
     imageStore(imgWrite,imgCoord,curColor);
