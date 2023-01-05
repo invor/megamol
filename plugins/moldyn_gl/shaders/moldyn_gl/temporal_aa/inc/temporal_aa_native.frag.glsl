@@ -1,13 +1,12 @@
 uniform sampler2D curColorTex;
 uniform sampler2D motionVecTex;
 
-layout(rgba8)uniform image2D prevColorRead;
-layout(rgba8)uniform image2D prevColorWrite;
-
 layout(binding=0,rgba8)uniform image2D imgRead;
 layout(binding=1,rgba8)uniform image2D imgWrite;
 layout(binding=2,rg32f)uniform image2D imgPosRead;
 layout(binding=3,rg32f)uniform image2D imgPosWrite;
+layout(binding=4,rgba8)uniform image2D prevColorRead;
+layout(binding=5,rgba8)uniform image2D prevColorWrite;
 
 uniform ivec2 resolution;
 uniform mat4 shiftMx;

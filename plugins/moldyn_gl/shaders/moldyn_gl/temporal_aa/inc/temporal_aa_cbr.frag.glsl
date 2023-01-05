@@ -1,13 +1,12 @@
 uniform sampler2D curColorTex;
 uniform sampler2D motionVecTex;
 
-layout(rgba8)uniform image2D prevColorRead;
-layout(rgba8)uniform image2D prevColorWrite;
-
 layout(binding=0,rgba8)uniform image2D imgRead;
 layout(binding=1,rgba8)uniform image2D imgWrite;
 layout(binding=2,rg32f)uniform image2D imgPosRead;
 layout(binding=3,rg32f)uniform image2D imgPosWrite;
+layout(binding=4,rgba8)uniform image2D prevColorRead;
+layout(binding=5,rgba8)uniform image2D prevColorWrite;
 
 uniform ivec2 resolution;
 uniform ivec2 lowResResolution;
@@ -27,6 +26,14 @@ void main(){
     const ivec2 imgCoord=ivec2(int(uvCoords.x*float(resolution.x)),int(uvCoords.y*float(resolution.y)));
     const ivec2 lowResImgCoord=ivec2(int(uvCoords.x*float(lowResResolution.x)),int(uvCoords.y*float(lowResResolution.y)));
     
+    // get reprojected position for previous color texture
+    const vec2 unijitterdUV=uvCoords-prevJitter-curJitter;
+    const ivec2 unjitteredImgCoord=ivec2(int(unijitterdUV.x*float(lowResResolution.x)),int(unijitterdUV.y*float(lowResResolution.y)));
+    const vec4 curVelSample=texelFetch(motionVecTex,unjitteredImgCoord,0);
+    const vec2 curVel=vec2(curVelSample.r,curVelSample.g);
+    const vec2 reprojectedUV=uvCoords+curVel;
+    const ivec2 reprojectedImgCoords=ivec2(int(reprojectedUV.x*float(lowResResolution.x)),int(reprojectedUV.y*float(lowResResolution.y)));
+    
     const vec2 frustumSize=vec2(frustumHeight*camAspect,frustumHeight);
     const vec2 posWorldSpace=camCenter.xy+frustumSize*(uvCoords-.5f);
     vec4 color=vec4(0.f);
@@ -41,7 +48,7 @@ void main(){
         curColor=texelFetch(curColorTex,lowResImgCoord,0);
     }else{
         //TODO: reprojection at top
-        curColor=imageLoad(imgRead,imgCoord);
+        curColor=imageLoad(prevColorRead,reprojectedImgCoords);
     }
     
     imageStore(imgPosWrite,imgCoord,vec4(posWorldSpace,0.f,0.f));
@@ -49,6 +56,7 @@ void main(){
     #ifdef TAA
     // Sample a 2x2 neighborhood to create a box in color space
     // compared to normal TAA just 2x2 because of lower resolution (this produces smoother edges compared too using 3x3)
+    // TODO: Test which works better
     for(int x=-1;x<=0;++x)
     {
         ivec2 curCoord=lowResImgCoord+ivec2(x,x+1);
@@ -62,19 +70,25 @@ void main(){
         maxColor=max(maxColor,tempColor);
     }
     
-    // TAA resolve
+    /*
+    for(int x=-1;x<=1;++x)
+    {
+        for(int y=-1;y<=1;++y)
+        {
+            ivec2 curCoord=lowResImgCoord+ivec2(x,y);
+            vec4 tempColor=texelFetch(curColorTex,curCoord,0);// Sample neighbor
+            minColor=min(minColor,tempColor);// Take min and max
+            maxColor=max(maxColor,tempColor);
+        }
+    }
+    */
     
-    // get reprojected position for previous color texture
-    const vec2 unijitterdUV=uvCoords-prevJitter-curJitter;
-    const ivec2 unjitteredImgCoord=ivec2(int(unijitterdUV.x*float(lowResResolution.x)),int(unijitterdUV.y*float(lowResResolution.y)));
-    const vec4 curVelSample=texelFetch(motionVecTex,unjitteredImgCoord,0);
-    const vec2 curVel=vec2(curVelSample.r,curVelSample.g);
-    const vec2 reprojectedUV=uvCoords+curVel;
-    const ivec2 reprojectedImgCoords=ivec2(int(reprojectedUV.x*float(lowResResolution.x)),int(reprojectedUV.y*float(lowResResolution.y)));
+    // TAA resolve
     
     vec4 prevColor=vec4(0.f);
     
-    prevColor=imageLoad(imgRead,imgCoord);
+    prevColor=imageLoad(prevColorRead,reprojectedImgCoords);
+    
     // Clamp previous color to min/max bounding box
     vec4 previousColorClamped=clamp(prevColor,minColor,maxColor);
     

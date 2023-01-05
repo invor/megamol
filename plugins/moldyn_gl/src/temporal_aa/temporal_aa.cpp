@@ -94,9 +94,7 @@ bool TemporalAA::create() {
     return true;
 }
 
-void TemporalAA::release() {
-    Release();
-}
+void TemporalAA::release() {}
 
 bool TemporalAA::GetExtents(CallRender3DGL& call) {
     CallRender3DGL* chainedCall = chainRenderSlot.template CallAs<CallRender3DGL>();
@@ -211,21 +209,15 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     temporal_aa_prgm_->setUniform("curColorTex", 0);
 
     glActiveTexture(GL_TEXTURE1);
-    old_lowres_color_read_->bindImage(0, GL_READ_ONLY);
-    temporal_aa_prgm_->setUniform("prevColorRead", 1);
-
-    glActiveTexture(GL_TEXTURE3);
-    old_lowres_color_write_->bindImage(0, GL_WRITE_ONLY);
-    temporal_aa_prgm_->setUniform("prevColorWrite", 3);
-
-    glActiveTexture(GL_TEXTURE2);
     motion_vector_texture->bindTexture();
-    temporal_aa_prgm_->setUniform("motionVecTex", 2);
+    temporal_aa_prgm_->setUniform("motionVecTex", 1);
 
     texRead_->bindImage(0, GL_READ_ONLY);
     texWrite_->bindImage(1, GL_WRITE_ONLY);
     distTexRead_->bindImage(2, GL_READ_ONLY);
     distTexWrite_->bindImage(3, GL_WRITE_ONLY);
+    old_lowres_color_read_->bindImage(4, GL_READ_ONLY);
+    old_lowres_color_write_->bindImage(5, GL_WRITE_ONLY);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
