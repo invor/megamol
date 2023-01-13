@@ -1188,11 +1188,11 @@ bool SphereRenderer::renderSimple(mmstd_gl::CallRender3DGL& call, MultiParticleD
             if (parts.IsVAO()) {
                 glBindVertexArray(vao);
                 this->enableBufferData(
-                    this->sphere_prgm_, parts, vb, parts.GetVertexData(), cb, parts.GetColourData(), true); // or false?
+                    this->sphere_prgm_, parts, vb, parts.GetVertexData(), cb, parts.GetColourData(), 0, nullptr, true); // or false?
             }
         }
         if ((this->render_mode_ == RenderMode::SIMPLE) || (!parts.IsVAO())) {
-            this->enableBufferData(this->sphere_prgm_, parts, 0, parts.GetVertexData(), 0, parts.GetColourData());
+            this->enableBufferData(this->sphere_prgm_, parts, 0, parts.GetVertexData(), 0, parts.GetColourData(), 0, parts.GetDirData());
         }
 
 #ifdef MEGAMOL_USE_PROFILING
@@ -1608,7 +1608,7 @@ bool SphereRenderer::renderBufferArray(mmstd_gl::CallRender3DGL& call, MultiPart
                 }
                 this->enableBufferData(this->sphere_prgm_, parts, this->the_single_buffer_,
                     reinterpret_cast<const void*>(curr_vert - whence), this->the_single_buffer_,
-                    reinterpret_cast<const void*>(curr_col - whence));
+                    reinterpret_cast<const void*>(curr_col - whence), 0, nullptr);
 
                 glDrawArrays(
                     GL_POINTS, static_cast<GLint>(num_verts * this->curr_buf_), static_cast<GLsizei>(verts_this_time));
@@ -1692,7 +1692,7 @@ bool SphereRenderer::renderGeometryShader(mmstd_gl::CallRender3DGL& call, MultiP
                 this->soft_select_color_param_.Param<param::ColorParam>()->Value().data());
         }
 
-        this->enableBufferData(this->sphere_geometry_prgm_, parts, 0, parts.GetVertexData(), 0, parts.GetColourData());
+        this->enableBufferData(this->sphere_geometry_prgm_, parts, 0, parts.GetVertexData(), 0, parts.GetColourData(), 0, parts.GetDirData());
 
         glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(parts.GetCount()));
 
@@ -1847,7 +1847,7 @@ bool SphereRenderer::renderOutline(mmstd_gl::CallRender3DGL& call, MultiParticle
                 this->soft_select_color_param_.Param<param::ColorParam>()->Value().data());
         }
 
-        this->enableBufferData(this->sphere_prgm_, parts, 0, parts.GetVertexData(), 0, parts.GetColourData());
+        this->enableBufferData(this->sphere_prgm_, parts, 0, parts.GetVertexData(), 0, parts.GetColourData(), 0, parts.GetDirData());
 
         glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(parts.GetCount()));
 
@@ -1867,131 +1867,163 @@ bool SphereRenderer::renderOutline(mmstd_gl::CallRender3DGL& call, MultiParticle
 
 bool SphereRenderer::enableBufferData(const std::shared_ptr<glowl::GLSLProgram> prgm,
     const MultiParticleDataCall::Particles& parts, GLuint vert_buf, const void* vert_ptr, GLuint col_buf,
-    const void* col_ptr, bool create_buffer_data) {
+    const void* col_ptr, GLuint vel_buf, const void* vel_ptr, bool create_buffer_data) {
 
     GLuint vert_attrib_loc = glGetAttribLocation(prgm->getHandle(), "inPosition");
     GLuint col_attrib_loc = glGetAttribLocation(prgm->getHandle(), "inColor");
     GLuint col_idx_attrib_loc = glGetAttribLocation(prgm->getHandle(), "inColIdx");
+    GLuint vel_attrib_loc = glGetAttribLocation(prgm->getHandle(), "inVelocity");
 
     const void* color_ptr = col_ptr;
     const void* vertex_ptr = vert_ptr;
+    const void* velocity_ptr = vel_ptr;
     if (create_buffer_data) {
         color_ptr = nullptr;
         vertex_ptr = nullptr;
+        velocity_ptr = nullptr;
     }
 
     unsigned int part_count = static_cast<unsigned int>(parts.GetCount());
 
     // colour
-    glBindBuffer(GL_ARRAY_BUFFER, col_buf);
-    switch (parts.GetColourDataType()) {
-    case MultiParticleDataCall::Particles::COLDATA_NONE:
-        break;
-    case MultiParticleDataCall::Particles::COLDATA_UINT8_RGB:
-        if (create_buffer_data) {
-            glBufferData(GL_ARRAY_BUFFER, part_count * (std::max)(parts.GetColourDataStride(), 3u),
-                parts.GetColourData(), GL_STATIC_DRAW);
+    {
+        glBindBuffer(GL_ARRAY_BUFFER, col_buf);
+
+        unsigned int component_cnt = 0;
+        GLenum component_type = GL_INVALID_ENUM;
+        unsigned int byte_size = 0;
+
+        switch (parts.GetColourDataType()) {
+        case MultiParticleDataCall::Particles::COLDATA_NONE:
+            break;
+        case MultiParticleDataCall::Particles::COLDATA_UINT8_RGB:
+            component_cnt = 3;
+            byte_size = 3u;
+            component_type = GL_UNSIGNED_BYTE;
+            break;
+        case MultiParticleDataCall::Particles::COLDATA_UINT8_RGBA:
+            component_cnt = 4;
+            byte_size = 4u;
+            component_type = GL_UNSIGNED_BYTE;
+            break;
+        case MultiParticleDataCall::Particles::COLDATA_FLOAT_RGB:
+            component_cnt = 3;
+            byte_size = 3 * sizeof(float);
+            component_type = GL_FLOAT;
+            break;
+        case MultiParticleDataCall::Particles::COLDATA_FLOAT_RGBA:
+            component_cnt = 4;
+            byte_size = 4 * sizeof(float);
+            component_type = GL_FLOAT;
+            break;
+        case MultiParticleDataCall::Particles::COLDATA_FLOAT_I:
+            component_cnt = 1;
+            byte_size = sizeof(float);
+            component_type = GL_FLOAT;
+            break;
+        case MultiParticleDataCall::Particles::COLDATA_DOUBLE_I:
+            component_cnt = 1;
+            byte_size = sizeof(double); // was set to sizeof(float) in original implementation, but that cant be right?
+            component_type = GL_DOUBLE;
+            break;
+        case MultiParticleDataCall::Particles::COLDATA_USHORT_RGBA:
+            component_cnt = 4;
+            byte_size = 4 * sizeof(unsigned short);
+            component_type = GL_UNSIGNED_SHORT;
+            break;
+        default:
+            break;
         }
-        glEnableVertexAttribArray(col_attrib_loc);
-        glVertexAttribPointer(col_attrib_loc, 3, GL_UNSIGNED_BYTE, GL_TRUE, parts.GetColourDataStride(), color_ptr);
-        break;
-    case MultiParticleDataCall::Particles::COLDATA_UINT8_RGBA:
-        if (create_buffer_data) {
-            glBufferData(GL_ARRAY_BUFFER, part_count * (std::max)(parts.GetColourDataStride(), 4u),
-                parts.GetColourData(), GL_STATIC_DRAW);
+
+        if (parts.GetColourDataType() != MultiParticleDataCall::Particles::COLDATA_NONE) {
+            if (create_buffer_data) {
+                glBufferData(GL_ARRAY_BUFFER, part_count * (std::max)(parts.GetColourDataStride(), byte_size),
+                    parts.GetColourData(), GL_STATIC_DRAW);
+            }
+            glEnableVertexAttribArray(col_attrib_loc);
+            glVertexAttribPointer(
+                col_attrib_loc, component_cnt, component_type, GL_TRUE, parts.GetColourDataStride(), color_ptr);
         }
-        glEnableVertexAttribArray(col_attrib_loc);
-        glVertexAttribPointer(col_attrib_loc, 4, GL_UNSIGNED_BYTE, GL_TRUE, parts.GetColourDataStride(), color_ptr);
-        break;
-    case MultiParticleDataCall::Particles::COLDATA_FLOAT_RGB:
-        if (create_buffer_data) {
-            glBufferData(GL_ARRAY_BUFFER,
-                part_count * (std::max)(parts.GetColourDataStride(), static_cast<unsigned int>(3 * sizeof(float))),
-                parts.GetColourData(), GL_STATIC_DRAW);
-        }
-        glEnableVertexAttribArray(col_attrib_loc);
-        glVertexAttribPointer(col_attrib_loc, 3, GL_FLOAT, GL_TRUE, parts.GetColourDataStride(), color_ptr);
-        break;
-    case MultiParticleDataCall::Particles::COLDATA_FLOAT_RGBA:
-        if (create_buffer_data) {
-            glBufferData(GL_ARRAY_BUFFER,
-                part_count * (std::max)(parts.GetColourDataStride(), static_cast<unsigned int>(4 * sizeof(float))),
-                parts.GetColourData(), GL_STATIC_DRAW);
-        }
-        glEnableVertexAttribArray(col_attrib_loc);
-        glVertexAttribPointer(col_attrib_loc, 4, GL_FLOAT, GL_TRUE, parts.GetColourDataStride(), color_ptr);
-        break;
-    case MultiParticleDataCall::Particles::COLDATA_FLOAT_I:
-    case MultiParticleDataCall::Particles::COLDATA_DOUBLE_I: {
-        if (create_buffer_data) {
-            glBufferData(GL_ARRAY_BUFFER,
-                part_count * (std::max)(parts.GetColourDataStride(), static_cast<unsigned int>(1 * sizeof(float))),
-                parts.GetColourData(), GL_STATIC_DRAW);
-        }
-        glEnableVertexAttribArray(col_idx_attrib_loc);
-        if (parts.GetColourDataType() == MultiParticleDataCall::Particles::COLDATA_FLOAT_I) {
-            glVertexAttribPointer(col_idx_attrib_loc, 1, GL_FLOAT, GL_FALSE, parts.GetColourDataStride(), color_ptr);
-        } else {
-            glVertexAttribPointer(col_idx_attrib_loc, 1, GL_DOUBLE, GL_FALSE, parts.GetColourDataStride(), color_ptr);
-        }
-    } break;
-    case MultiParticleDataCall::Particles::COLDATA_USHORT_RGBA:
-        if (create_buffer_data) {
-            glBufferData(GL_ARRAY_BUFFER,
-                part_count *
-                    (std::max)(parts.GetColourDataStride(), static_cast<unsigned int>(4 * sizeof(unsigned short))),
-                parts.GetColourData(), GL_STATIC_DRAW);
-        }
-        glEnableVertexAttribArray(col_attrib_loc);
-        glVertexAttribPointer(col_attrib_loc, 4, GL_UNSIGNED_SHORT, GL_TRUE, parts.GetColourDataStride(), color_ptr);
-        break;
-    default:
-        break;
     }
 
+
     // radius and position
-    glBindBuffer(GL_ARRAY_BUFFER, vert_buf);
-    switch (parts.GetVertexDataType()) {
-    case MultiParticleDataCall::Particles::VERTDATA_NONE:
-        break;
-    case MultiParticleDataCall::Particles::VERTDATA_FLOAT_XYZ:
-        if (create_buffer_data) {
-            glBufferData(GL_ARRAY_BUFFER,
-                part_count * (std::max)(parts.GetVertexDataStride(), static_cast<unsigned int>(3 * sizeof(float))),
-                parts.GetVertexData(), GL_STATIC_DRAW);
+    {
+        glBindBuffer(GL_ARRAY_BUFFER, vert_buf);
+
+        unsigned int component_cnt = 0;
+        GLenum component_type = GL_INVALID_ENUM;
+        unsigned int byte_size = 0;
+
+        switch (parts.GetVertexDataType()) {
+        case MultiParticleDataCall::Particles::VERTDATA_NONE:
+            break;
+        case MultiParticleDataCall::Particles::VERTDATA_FLOAT_XYZ:
+            component_cnt = 3;
+            byte_size = 3 * sizeof(float);
+            component_type = GL_FLOAT;
+            break;
+        case MultiParticleDataCall::Particles::VERTDATA_FLOAT_XYZR:
+            component_cnt = 4;
+            byte_size = 4 * sizeof(float);
+            component_type = GL_FLOAT;
+            break;
+        case MultiParticleDataCall::Particles::VERTDATA_DOUBLE_XYZ:
+            component_cnt = 3;
+            byte_size = 3 * sizeof(double);
+            component_type = GL_DOUBLE;
+            break;
+        case MultiParticleDataCall::Particles::VERTDATA_SHORT_XYZ:
+            component_cnt = 3;
+            byte_size = 3 * sizeof(short);
+            component_type = GL_SHORT;
+            break;
+        default:
+            break;
         }
-        glEnableVertexAttribArray(vert_attrib_loc);
-        glVertexAttribPointer(vert_attrib_loc, 3, GL_FLOAT, GL_FALSE, parts.GetVertexDataStride(), vertex_ptr);
-        break;
-    case MultiParticleDataCall::Particles::VERTDATA_FLOAT_XYZR:
-        if (create_buffer_data) {
-            glBufferData(GL_ARRAY_BUFFER,
-                part_count * (std::max)(parts.GetVertexDataStride(), static_cast<unsigned int>(4 * sizeof(float))),
-                parts.GetVertexData(), GL_STATIC_DRAW);
+
+        if (parts.GetVertexDataType() != MultiParticleDataCall::Particles::VERTDATA_NONE) {
+            if (create_buffer_data) {
+                glBufferData(GL_ARRAY_BUFFER, part_count * (std::max)(parts.GetVertexDataStride(), byte_size),
+                    parts.GetVertexData(), GL_STATIC_DRAW);
+            }
+            glEnableVertexAttribArray(vert_attrib_loc);
+            glVertexAttribPointer(
+                vert_attrib_loc, component_cnt, component_type, GL_FALSE, parts.GetVertexDataStride(), vertex_ptr);
         }
-        glEnableVertexAttribArray(vert_attrib_loc);
-        glVertexAttribPointer(vert_attrib_loc, 4, GL_FLOAT, GL_FALSE, parts.GetVertexDataStride(), vertex_ptr);
-        break;
-    case MultiParticleDataCall::Particles::VERTDATA_DOUBLE_XYZ:
-        if (create_buffer_data) {
-            glBufferData(GL_ARRAY_BUFFER,
-                part_count * (std::max)(parts.GetVertexDataStride(), static_cast<unsigned int>(3 * sizeof(double))),
-                parts.GetVertexData(), GL_STATIC_DRAW);
+    }
+
+    // velocity
+    {
+        glBindBuffer(GL_ARRAY_BUFFER, vel_buf);
+
+        unsigned int component_cnt = 0;
+        GLenum component_type = GL_INVALID_ENUM;
+        unsigned int byte_size = 0;
+
+        switch (parts.GetDirDataType()) {
+        case MultiParticleDataCall::Particles::DIRDATA_NONE:
+            break;
+        case MultiParticleDataCall::Particles::DIRDATA_FLOAT_XYZ:
+            component_cnt = 3;
+            byte_size = 3 * sizeof(float);
+            component_type = GL_FLOAT;
+            break;
+        default:
+            break;
         }
-        glEnableVertexAttribArray(vert_attrib_loc);
-        glVertexAttribPointer(vert_attrib_loc, 3, GL_DOUBLE, GL_FALSE, parts.GetVertexDataStride(), vertex_ptr);
-        break;
-    case MultiParticleDataCall::Particles::VERTDATA_SHORT_XYZ:
-        if (create_buffer_data) {
-            glBufferData(GL_ARRAY_BUFFER,
-                part_count * (std::max)(parts.GetVertexDataStride(), static_cast<unsigned int>(3 * sizeof(short))),
-                parts.GetVertexData(), GL_STATIC_DRAW);
+
+        if (parts.GetDirDataType() != MultiParticleDataCall::Particles::DIRDATA_NONE &&
+            (velocity_ptr != nullptr || create_buffer_data)) // TODO update condition
+        {
+            if (create_buffer_data) {
+                glBufferData(GL_ARRAY_BUFFER, part_count * (std::max)(parts.GetDirDataStride(), byte_size),
+                    parts.GetDirData(), GL_STATIC_DRAW);
+            }
+            glEnableVertexAttribArray(vel_attrib_loc);
+            glVertexAttribPointer(
+                vel_attrib_loc, component_cnt, component_type, GL_FALSE, parts.GetDirDataStride(), velocity_ptr);
         }
-        glEnableVertexAttribArray(vert_attrib_loc);
-        glVertexAttribPointer(vert_attrib_loc, 3, GL_SHORT, GL_FALSE, parts.GetVertexDataStride(), vertex_ptr);
-        break;
-    default:
-        break;
     }
 
     return true;
@@ -2427,7 +2459,7 @@ void SphereRenderer::rebuildWorkingData(
 
             glBindVertexArray(this->gpu_data_[i].vertex_array);
             this->enableBufferData(prgm, parts, this->gpu_data_[i].vertex_vbo, parts.GetVertexData(),
-                this->gpu_data_[i].color_vbo, parts.GetColourData(), true);
+                this->gpu_data_[i].color_vbo, parts.GetColourData(), 0, parts.GetDirData(), true); //TODO fix dir upload
             glBindVertexArray(0);
             this->disableBufferData(prgm);
         }

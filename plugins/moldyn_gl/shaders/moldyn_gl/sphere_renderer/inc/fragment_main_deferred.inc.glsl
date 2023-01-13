@@ -23,6 +23,7 @@ void main(void) {
     // Output unlit surface color and normal to render targets
     outColor = sphereIntersection.color;
     outNormal = sphereIntersection.normal;
+    outVelocity = velocity;
 
 // Calculate depth
 #ifdef DEPTH
