@@ -14,7 +14,7 @@ megamol::compositing_gl::MotionVectorRenderTarget::MotionVectorRenderTarget()
 
 bool megamol::compositing_gl::MotionVectorRenderTarget::create() {
     SimpleRenderTarget::create();
-    m_GBuffer->createColorAttachment(GL_RG16F, GL_RG, GL_HALF_FLOAT); // motion vector texture
+    m_GBuffer->createColorAttachment(GL_RGB32F, GL_RGB, GL_FLOAT); // motion vector texture
     return true;
 }
 

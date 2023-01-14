@@ -203,6 +203,9 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     temporal_aa_prgm_->setUniform("numSamples", num_samples_);
     temporal_aa_prgm_->setUniform("frameIdx", frameIdx_);
     temporal_aa_prgm_->setUniform("samplingSequencePosition", samplingSequencePosition_);
+    temporal_aa_prgm_->setUniform("viewProjMx", viewProjMx_);
+    temporal_aa_prgm_->setUniform("viewMx", cam.getViewMatrix());
+    temporal_aa_prgm_->setUniform("projMx", cam.getProjectionMatrix());
 
     glActiveTexture(GL_TEXTURE0);
     fbo_->bindColorbuffer(0);
