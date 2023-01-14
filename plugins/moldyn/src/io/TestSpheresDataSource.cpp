@@ -92,18 +92,18 @@ void TestSpheresDataSource::loadFrame(AnimDataModule::Frame* frame, unsigned int
     frm->SetFrameNumber(idx);
     auto frameCount = this->numFramesSlot.Param<core::param::IntParam>()->Value();
     auto sphereCount = this->numSpheresSlot.Param<core::param::IntParam>()->Value();
-    frm->data = new float[8 * sphereCount];
+    frm->data = new float[12 * sphereCount];
     std::mt19937 twister;
     auto new_rand = [&twister]() -> int32_t { return twister() & RAND_MAX; };
     auto new_seed = [&twister](uint32_t i) { twister.seed(i); };
     for (unsigned int i = 0; i < sphereCount; i++) {
-        vislib::math::ShallowVector<float, 3> pos(&frm->data[i * 8]);
+        vislib::math::ShallowVector<float, 3> pos(&frm->data[i * 12]);
         new_seed(i); // stablize values for particles
-        float& r = frm->data[i * 8 + 3];
-        float& cr = frm->data[i * 8 + 4];
-        float& cg = frm->data[i * 8 + 5];
-        float& cb = frm->data[i * 8 + 6];
-        float& ca = frm->data[i * 8 + 7];
+        float& r = frm->data[i * 12 + 3];
+        float& cr = frm->data[i * 12 + 4];
+        float& cg = frm->data[i * 12 + 5];
+        float& cb = frm->data[i * 12 + 6];
+        float& ca = frm->data[i * 12 + 7];
         vislib::math::Vector<float, 3> X(static_cast<float>((new_rand() % 2) * 2 - 1), 0.0f, 0.0f);
         vislib::math::Vector<float, 3> Y(0.0f, static_cast<float>((new_rand() % 2) * 2 - 1), 0.0f);
         vislib::math::Vector<float, 3> Z(static_cast<float>(1000 - new_rand() % 2001) * 0.001f,
@@ -139,10 +139,32 @@ void TestSpheresDataSource::loadFrame(AnimDataModule::Frame* frame, unsigned int
         X = rot * X;
         Y = rot * Y;
 
+         // compute velocity as backward difference
+        vislib::math::Vector<float, 3> prev_pos(0.0f);
+        if (idx >= 1) {
+            float prev_a = (static_cast<float>(2 * (idx-1)) / static_cast<float>(frameCount)) * static_cast<float>(M_PI);
+            vislib::math::Vector<float, 3> prev_X = X;
+            vislib::math::Vector<float, 3> prev_Y = Y;
+
+            prev_X *= sin(prev_a) * dist;
+            prev_Y *= cos(prev_a) * dist;
+
+            prev_pos = prev_X;
+            prev_pos += prev_Y;
+        }
+
         X *= sin(a) * dist;
         Y *= cos(a) * dist;
         pos = X;
         pos += Y;
+
+        vislib::math::ShallowVector<float, 3> vel(&frm->data[i * 12 + 8]);
+        if (idx >= 1) {
+            vel = (pos - prev_pos) * 10.0;
+            frm->data[i * 12 + 11] = vel.Length();
+        } else {
+            vel = vislib::math::Vector<float, 3>(0.0f);
+        }
 
         r = 0.05f + static_cast<float>(new_rand() % 501) * 0.0001f;
 
@@ -235,9 +257,11 @@ bool TestSpheresDataSource::getDataCallback(core::Call& caller) {
     mpdc->SetParticleListCount(1);
     mpdc->AccessParticles(0).SetCount(sphereCount);
     mpdc->AccessParticles(0).SetVertexData(
-        geocalls::SimpleSphericalParticles::VERTDATA_FLOAT_XYZR, frm->data, sizeof(float) * 8);
+        geocalls::SimpleSphericalParticles::VERTDATA_FLOAT_XYZR, frm->data, sizeof(float) * 12);
     mpdc->AccessParticles(0).SetColourData(
-        geocalls::SimpleSphericalParticles::COLDATA_FLOAT_RGBA, frm->data + 4, sizeof(float) * 8);
+        geocalls::SimpleSphericalParticles::COLDATA_FLOAT_RGBA, frm->data + 4, sizeof(float) * 12);
+    mpdc->AccessParticles(0).SetDirData(
+        geocalls::SimpleSphericalParticles::DIRDATA_FLOAT_XYZ, frm->data + 8, sizeof(float) * 12);
     mpdc->SetUnlocker(NULL);
 
     return true;

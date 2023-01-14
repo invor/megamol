@@ -468,7 +468,7 @@ private:
      * @return 'True' on success, 'false' otherwise.
      */
     bool enableBufferData(const std::shared_ptr<glowl::GLSLProgram> prgm, const MultiParticleDataCall::Particles& parts,
-        GLuint vert_buf, const void* vert_ptr, GLuint col_buf, const void* col_ptr, bool create_buffer_data = false);
+        GLuint vert_buf, const void* vert_ptr, GLuint col_buf, const void* col_ptr, GLuint vel_buf, const void* vel_ptr, bool create_buffer_data = false);
 
     /**
      * Unset pointers to vertex and color buffers.

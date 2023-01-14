@@ -5,6 +5,7 @@ in vec4 outlightDir;
 in float squarRad;
 in float rad;
 in vec4 vertColor;
+in vec3 velocity;
 
 // SPLAT
 in float effectiveDiameter;
