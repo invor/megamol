@@ -85,6 +85,16 @@ bool TemporalAA::create() {
         },
         {});
 
+    velTexLayout_ = glowl::TextureLayout(GL_RGB32F, 1, 1, 1, GL_RGB, GL_FLOAT, 1,
+        {
+            {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER},
+            {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER},
+            {GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER},
+            {GL_TEXTURE_MIN_FILTER, GL_NEAREST},
+            {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
+        },
+        {});
+
     texRead_ = std::make_unique<glowl::Texture2D>("texStoreA", texLayout_, nullptr);
     texWrite_ = std::make_unique<glowl::Texture2D>("texStoreB", texLayout_, nullptr);
     old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", texLayout_, nullptr);
@@ -177,10 +187,13 @@ bool TemporalAA::Render(CallRender3DGL& call) {
         return false;
     }
 
-    // in first frame just use the same colorbuffer
-    if (frames_ == 1) {
-        //fbo_->getColorAttachment(0)->copy(fbo_->getColorAttachment(0).get(), old_fbo_->getColorAttachment(0).get());
+    float cur_time = glm::floor(call.Time());
+
+    if (cur_time == time_) {
+        motion_vector_texture = zero_velocity_texture_;
     }
+
+    time_ = cur_time;
 
     glViewport(0, 0, w, h);
     lhs_input_fbo->bind();
@@ -288,6 +301,13 @@ bool TemporalAA::updateParams() {
         old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", layout, zero_data.data());
         old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", layout, zero_data.data());
 
+        velTexLayout_.width = oldWidth_ / 2;
+        velTexLayout_.height = oldHeight_;
+        const std::vector<float> velocity_zero_data(
+            3 * (oldWidth_ / 2) * oldHeight_, std::numeric_limits<float>::lowest());
+        zero_velocity_texture_ =
+            std::make_unique<glowl::Texture2D>("velZeroData", velTexLayout_, velocity_zero_data.data());
+
     } else {
         shader_options_flags_->addDefinition("NONE");
         fbo_->resize(oldWidth_, oldHeight_);
@@ -298,6 +318,12 @@ bool TemporalAA::updateParams() {
         const std::vector<uint32_t> zero_data(oldWidth_ * oldHeight_, 0);
         old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", layout, zero_data.data());
         old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", layout, zero_data.data());
+
+        velTexLayout_.width = oldWidth_;
+        velTexLayout_.height = oldHeight_;
+        const std::vector<float> velocity_zero_data(3 * oldWidth_ * oldHeight_, std::numeric_limits<float>::lowest());
+        zero_velocity_texture_ =
+            std::make_unique<glowl::Texture2D>("velZeroData", velTexLayout_, velocity_zero_data.data());
     }
 
     viewProjMx_ = glm::mat4(1.0f);

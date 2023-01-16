@@ -75,12 +75,14 @@ private:
     std::unique_ptr<msf::ShaderFactoryOptionsOpenGL> shader_options_flags_;
     glowl::TextureLayout texLayout_;
     glowl::TextureLayout distTexLayout_;
+    glowl::TextureLayout velTexLayout_;
     std::unique_ptr<glowl::Texture2D> texRead_;
     std::unique_ptr<glowl::Texture2D> texWrite_;
     std::unique_ptr<glowl::Texture2D> distTexRead_;
     std::unique_ptr<glowl::Texture2D> distTexWrite_;
     std::unique_ptr<glowl::Texture2D> old_lowres_color_read_;
     std::unique_ptr<glowl::Texture2D> old_lowres_color_write_;
+    std::shared_ptr<glowl::Texture2D> zero_velocity_texture_;
 
     /** Dummy motion vector texture to use when no texture is connected */
     std::shared_ptr<glowl::Texture2D> m_dummy_motion_vector_tx_;
@@ -95,6 +97,7 @@ private:
     glm::uint frames_ = 0;
     glm::vec2 prev_jitter_;
     glm::vec2 cur_jitter_;
+    float time_ = 0.0f;
 
     glm::uint
         num_samples_; // either the rotation of the halton_sequence or the upscaling factor (when upscaling turned on)
