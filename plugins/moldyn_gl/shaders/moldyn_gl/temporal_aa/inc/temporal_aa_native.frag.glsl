@@ -15,6 +15,9 @@ uniform float camAspect;
 uniform float frustumHeight;
 uniform vec2 prevJitter;
 uniform vec2 curJitter;
+uniform mat4 viewProjMx;
+uniform mat4 viewMx;
+uniform mat4 projMx;
 
 in vec2 uvCoords;
 
@@ -46,16 +49,14 @@ void main(){
         }
     }
     
-    // TODO: upscale code from Amortization here
-    
     // get reprojected position for previous color texture
-    const vec2 unijitterdUV=uvCoords-prevJitter-curJitter;
-    const ivec2 unjitteredImgCoord=ivec2(int(unijitterdUV.x*float(resolution.x)),int(unijitterdUV.y*float(resolution.y)));
-    const vec4 curVelSample=texelFetch(motionVecTex,unjitteredImgCoord,0);
-    const vec2 curVel=vec2(curVelSample.r,curVelSample.g);
-    const vec2 reprojectedUV=uvCoords+curVel;
-    const ivec2 reprojectedImgCoords=ivec2(int(reprojectedUV.x*float(resolution.x)),int(reprojectedUV.y*float(resolution.y)));
+    ivec2 unjitteredImgCoord=imgCoord-ivec2(prevJitter)-ivec2(curJitter);
+    vec4 curVel=texelFetch(motionVecTex,unjitteredImgCoord,0);
     
+    curVel=viewMx*curVel;
+    curVel=projMx*curVel;
+    const ivec2 reprojectedImgCoords=ivec2(int(uvCoords.x*float(resolution.x)),int(uvCoords.y*float(resolution.y)))+ivec2(curVel.r,curVel.g);
+    //const ivec2 reprojectedImgCoords=ivec2(int(uvCoords.x*float(resolution.x)+curVel.r),int(uvCoords.y*float(resolution.y)+curVel.g));
     vec4 prevColor=vec4(0.f);
     
     prevColor=imageLoad(prevColorRead,reprojectedImgCoords);

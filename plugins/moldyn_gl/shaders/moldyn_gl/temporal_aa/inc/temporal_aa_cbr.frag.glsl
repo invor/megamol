@@ -17,6 +17,9 @@ uniform float frustumHeight;
 uniform vec2 prevJitter;
 uniform vec2 curJitter;
 uniform int samplingSequencePosition;
+uniform mat4 viewProjMx;
+uniform mat4 viewMx;
+uniform mat4 projMx;
 
 in vec2 uvCoords;
 
@@ -27,12 +30,14 @@ void main(){
     const ivec2 lowResImgCoord=ivec2(int(uvCoords.x*float(lowResResolution.x)),int(uvCoords.y*float(lowResResolution.y)));
     
     // get reprojected position for previous color texture
-    const vec2 unijitterdUV=uvCoords-prevJitter-curJitter;
-    const ivec2 unjitteredImgCoord=ivec2(int(unijitterdUV.x*float(lowResResolution.x)),int(unijitterdUV.y*float(lowResResolution.y)));
-    const vec4 curVelSample=texelFetch(motionVecTex,unjitteredImgCoord,0);
-    const vec2 curVel=vec2(curVelSample.r,curVelSample.g);
-    const vec2 reprojectedUV=uvCoords+curVel;
-    const ivec2 reprojectedImgCoords=ivec2(int(reprojectedUV.x*float(lowResResolution.x)),int(reprojectedUV.y*float(lowResResolution.y)));
+    ivec2 unjitteredImgCoord=lowResImgCoord;
+    vec4 curVel=texelFetch(motionVecTex,unjitteredImgCoord,0);
+    
+    curVel=viewMx*curVel;
+    curVel=projMx*curVel;
+    
+    const ivec2 reprojectedImgCoords=ivec2(int(uvCoords.x*float(lowResResolution.x)),int(uvCoords.y*float(lowResResolution.y)))+ivec2(curVel.r,curVel.g);
+    //const ivec2 reprojectedImgCoords=ivec2(int(uvCoords.x*float(lowResResolution.x)+curVel.r),int(uvCoords.y*float(lowResResolution.y)+curVel.g));
     
     const vec2 frustumSize=vec2(frustumHeight*camAspect,frustumHeight);
     const vec2 posWorldSpace=camCenter.xy+frustumSize*(uvCoords-.5f);
@@ -47,7 +52,6 @@ void main(){
     if((samplingSequencePosition==0&&imgCoord.y%2==0)||(samplingSequencePosition==1&&imgCoord.y%2==1)){
         curColor=texelFetch(curColorTex,lowResImgCoord,0);
     }else{
-        //TODO: reprojection at top
         curColor=imageLoad(prevColorRead,reprojectedImgCoords);
     }
     
