@@ -12,13 +12,17 @@ using namespace megamol::compositing_gl;
 
 TemporalAA::TemporalAA(void)
         : core::view::RendererModule<CallRender3DGL, mmstd_gl::ModuleGL>()
-        , m_motion_vector_texture_call_("Motion Vectors Texture", "Access motion vector texture texture")
+        , m_motion_vector_texture_call_("Motion Vectors Texture", "Access motion vector texture")
         , m_dummy_motion_vector_tx_(nullptr)
+        , m_depth_texture_call_("Depth Texture", "Access depth texture")
+        , m_dummy_depth_tx_(nullptr)
         , halton_scale_param("HaltonScale", "Scale factor for camera jitter")
         , num_samples_param("NumOfSamples", "Number of samples")
         , scaling_mode_param("scalingMode", "The scaling mode used.") {
     m_motion_vector_texture_call_.SetCompatibleCall<CallTexture2DDescription>();
     MakeSlotAvailable(&m_motion_vector_texture_call_);
+    m_depth_texture_call_.SetCompatibleCall<CallTexture2DDescription>();
+    MakeSlotAvailable(&m_depth_texture_call_);
     MakeSlotAvailable(&chainRenderSlot);
     MakeSlotAvailable(&renderSlot);
 
@@ -175,7 +179,18 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 
     (*rhs_chained_call)(core::view::AbstractCallRender::FnRender);
 
-    // get rhs texture call
+    // get rhs texture calls
+    std::shared_ptr<glowl::Texture2D> depth_texture = m_dummy_depth_tx_;
+    CallTexture2D* dvt = m_depth_texture_call_.CallAs<CallTexture2D>();
+    if (dvt != NULL) {
+        (*dvt)(0);
+        depth_texture = dvt->getData();
+    }
+
+    if (depth_texture == nullptr) {
+        return false;
+    }
+
     std::shared_ptr<glowl::Texture2D> motion_vector_texture = m_dummy_motion_vector_tx_;
     CallTexture2D* mvt = m_motion_vector_texture_call_.CallAs<CallTexture2D>();
     if (mvt != NULL) {
@@ -194,6 +209,10 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     }
 
     time_ = cur_time;
+
+    if (frames_ == 1) {
+        fbo_->getColorAttachment(0)->copy(fbo_->getColorAttachment(0).get(), old_lowres_color_read_.get());
+    }
 
     glViewport(0, 0, w, h);
     lhs_input_fbo->bind();
@@ -219,14 +238,21 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     temporal_aa_prgm_->setUniform("viewProjMx", viewProjMx_);
     temporal_aa_prgm_->setUniform("viewMx", cam.getViewMatrix());
     temporal_aa_prgm_->setUniform("projMx", cam.getProjectionMatrix());
+    temporal_aa_prgm_->setUniform("lastViewProjMx", lastViewProjMx_);
+    temporal_aa_prgm_->setUniform("invViewMx", glm::inverse(cam.getViewMatrix()));
+    temporal_aa_prgm_->setUniform("invProjMx", glm::inverse(cam.getProjectionMatrix()));
 
-    glActiveTexture(GL_TEXTURE0);
+    glActiveTexture(GL_TEXTURE10);
     fbo_->bindColorbuffer(0);
-    temporal_aa_prgm_->setUniform("curColorTex", 0);
+    temporal_aa_prgm_->setUniform("curColorTex", 10);
 
-    glActiveTexture(GL_TEXTURE1);
+    glActiveTexture(GL_TEXTURE11);
     motion_vector_texture->bindTexture();
-    temporal_aa_prgm_->setUniform("motionVecTex", 1);
+    temporal_aa_prgm_->setUniform("motionVecTex", 11);
+
+    glActiveTexture(GL_TEXTURE12);
+    depth_texture->bindTexture();
+    temporal_aa_prgm_->setUniform("depthTex", 12);
 
     texRead_->bindImage(0, GL_READ_ONLY);
     texWrite_->bindImage(1, GL_WRITE_ONLY);

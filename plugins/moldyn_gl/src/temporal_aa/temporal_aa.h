@@ -84,9 +84,9 @@ private:
     std::unique_ptr<glowl::Texture2D> old_lowres_color_write_;
     std::shared_ptr<glowl::Texture2D> zero_velocity_texture_;
 
-    /** Dummy motion vector texture to use when no texture is connected */
+    /** Dummy textures to use when no texture is connected */
     std::shared_ptr<glowl::Texture2D> m_dummy_motion_vector_tx_;
-
+    std::shared_ptr<glowl::Texture2D> m_dummy_depth_tx_;
     // Render State
     glm::mat4 viewProjMx_;
     glm::mat4 lastViewProjMx_;
@@ -110,8 +110,9 @@ private:
     std::vector<int> samplingSequence_;
     std::vector<glm::vec3> camOffsets_;
 
-    // input slot for motion vectors
+    // input slots for textures
     core::CallerSlot m_motion_vector_texture_call_;
+    core::CallerSlot m_depth_texture_call_;
 
     // halton variables
     glm::vec2 halton_sequence_[128];

@@ -1,5 +1,6 @@
 uniform sampler2D curColorTex;
 uniform sampler2D motionVecTex;
+uniform sampler2D depthTex;
 
 layout(binding=0,rgba8)uniform image2D imgRead;
 layout(binding=1,rgba8)uniform image2D imgWrite;
@@ -18,10 +19,27 @@ uniform vec2 curJitter;
 uniform mat4 viewProjMx;
 uniform mat4 viewMx;
 uniform mat4 projMx;
+uniform mat4 lastViewProjMx;
+uniform mat4 invViewMx;
+uniform mat4 invProjMx;
 
 in vec2 uvCoords;
 
 out vec4 fragOut;
+
+vec3 depthToWorldPos(float depth,vec2 uv){
+    float z=depth*2.-1.;
+    
+    vec4 cs_pos=vec4(uv*2.-1.,z,1.);
+    vec4 vs_pos=invProjMx*cs_pos;
+    
+    // Perspective division
+    vs_pos/=vs_pos.w;
+    
+    vec4 ws_pos=invViewMx*vs_pos;
+    
+    return ws_pos.xyz;
+}
 
 void main(){
     const vec2 frustumSize=vec2(frustumHeight*camAspect,frustumHeight);
@@ -50,13 +68,20 @@ void main(){
     }
     
     // get reprojected position for previous color texture
-    ivec2 unjitteredImgCoord=imgCoord-ivec2(prevJitter)-ivec2(curJitter);
-    vec4 curVel=texelFetch(motionVecTex,unjitteredImgCoord,0);
+    float depth=texelFetch(depthTex,imgCoord,0).r;
+    vec3 worldPos=depthToWorldPos(depth,uvCoords);
+    vec3 vel=texelFetch(motionVecTex,imgCoord-ivec2(prevJitter)-ivec2(curJitter),0).rgb;
+    vec3 prevWorldPos=worldPos-vel;
     
-    curVel=viewMx*curVel;
-    curVel=projMx*curVel;
-    const ivec2 reprojectedImgCoords=ivec2(int(uvCoords.x*float(resolution.x)),int(uvCoords.y*float(resolution.y)))+ivec2(curVel.r,curVel.g);
-    //const ivec2 reprojectedImgCoords=ivec2(int(uvCoords.x*float(resolution.x)+curVel.r),int(uvCoords.y*float(resolution.y)+curVel.g));
+    vec4 clipCoord=lastViewProjMx*vec4(prevWorldPos,1);
+    clipCoord=clipCoord/clipCoord.w;
+    ivec2 reprojectedImgCoords=ivec2(int(clipCoord.x*float(resolution.x)),int(clipCoord.y*float(resolution.y)));
+    
+    /*
+    vec3 vel=texelFetch(motionVecTex,imgCoord- ivec2(curJitter) - ivec2(prevJitter),0).rgb;
+    ivec2 reprojectedImgCoords=ivec2(int(uvCoords.x*float(resolution.x) + vel.x),int(uvCoords.y*float(resolution.y + vel.y)));
+    */
+    
     vec4 prevColor=vec4(0.f);
     
     prevColor=imageLoad(prevColorRead,reprojectedImgCoords);
