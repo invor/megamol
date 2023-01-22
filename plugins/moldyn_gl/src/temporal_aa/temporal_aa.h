@@ -77,7 +77,7 @@ private:
     std::unique_ptr<glowl::Texture2D> old_lowres_color_read_;
     std::unique_ptr<glowl::Texture2D> old_lowres_color_write_;
     std::shared_ptr<glowl::Texture2D> zero_velocity_texture_;
-
+    std::shared_ptr<glowl::Texture2D> previous_vel_texture_;
     /** Dummy textures to use when no texture is connected */
     std::shared_ptr<glowl::Texture2D> m_dummy_motion_vector_tx_;
     std::shared_ptr<glowl::Texture2D> m_dummy_depth_tx_;

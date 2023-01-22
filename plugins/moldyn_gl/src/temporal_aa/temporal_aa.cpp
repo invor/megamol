@@ -91,6 +91,7 @@ bool TemporalAA::create() {
     old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", texLayout_, nullptr);
     old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", texLayout_, nullptr);
     zero_velocity_texture_ = std::make_unique<glowl::Texture2D>("zeroVelocity", velTexLayout_, nullptr);
+    previous_vel_texture_ = std::make_unique<glowl::Texture2D>("prevVelocity", velTexLayout_, nullptr);
     return true;
 }
 
@@ -207,17 +208,21 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     temporal_aa_prgm_->setUniform("invViewMx", glm::inverse(cam.getViewMatrix()));
     temporal_aa_prgm_->setUniform("invProjMx", glm::inverse(cam.getProjectionMatrix()));
 
-    glActiveTexture(GL_TEXTURE10);
+    glActiveTexture(GL_TEXTURE0);
     fbo_->bindColorbuffer(0);
-    temporal_aa_prgm_->setUniform("curColorTex", 10);
+    temporal_aa_prgm_->setUniform("curColorTex", 0);
 
-    glActiveTexture(GL_TEXTURE11);
+    glActiveTexture(GL_TEXTURE1);
     motion_vector_texture->bindTexture();
-    temporal_aa_prgm_->setUniform("motionVecTex", 11);
+    temporal_aa_prgm_->setUniform("motionVecTex", 1);
 
-    glActiveTexture(GL_TEXTURE12);
+    glActiveTexture(GL_TEXTURE2);
+    previous_vel_texture_->bindTexture();
+    temporal_aa_prgm_->setUniform("prevMotionVecTex", 2);
+
+    glActiveTexture(GL_TEXTURE3);
     depth_texture->bindTexture();
-    temporal_aa_prgm_->setUniform("depthTex", 12);
+    temporal_aa_prgm_->setUniform("depthTex", 3);
 
     old_lowres_color_read_->bindImage(0, GL_READ_ONLY);
     old_lowres_color_write_->bindImage(1, GL_WRITE_ONLY);
@@ -225,6 +230,8 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
     glUseProgram(0);
+
+    motion_vector_texture->copy(motion_vector_texture.get(), previous_vel_texture_.get());
 
     old_lowres_color_read_.swap(old_lowres_color_write_);
 
@@ -282,7 +289,8 @@ bool TemporalAA::updateParams() {
         const std::vector<float> velocity_zero_data(3 * (oldWidth_ / 2) * oldHeight_, 0.0f);
         zero_velocity_texture_ =
             std::make_unique<glowl::Texture2D>("velZeroData", velTexLayout_, velocity_zero_data.data());
-
+        previous_vel_texture_ =
+            std::make_unique<glowl::Texture2D>("prevVelocity", velTexLayout_, velocity_zero_data.data());
     } else {
         shader_options_flags_->addDefinition("NONE");
         fbo_->resize(oldWidth_, oldHeight_);
@@ -292,6 +300,8 @@ bool TemporalAA::updateParams() {
         const std::vector<float> velocity_zero_data(3 * oldWidth_ * oldHeight_, 0.0f);
         zero_velocity_texture_ =
             std::make_unique<glowl::Texture2D>("velZeroData", velTexLayout_, velocity_zero_data.data());
+        previous_vel_texture_ =
+            std::make_unique<glowl::Texture2D>("prevVelocity", velTexLayout_, velocity_zero_data.data());
     }
 
     texLayout_.width = oldWidth_;

@@ -1,5 +1,6 @@
 uniform sampler2D curColorTex;
 uniform sampler2D motionVecTex;
+uniform sampler2D prevMotionVecTex;
 uniform sampler2D depthTex;
 
 layout(binding=0,rgba8)uniform image2D prevColorRead;
@@ -76,13 +77,20 @@ void main(){
         maxColor=max(maxColor,tempColor);
     }
     
+    // velocity rejection
+    ivec2 lowresReprojectedCoords=ivec2(int(clipCoord.x*float(lowResResolution.x)),int(clipCoord.y*float(lowResResolution.y)));
+    vec3 prevVel=texelFetch(motionVecTex,lowresReprojectedCoords,0).rgb;
+    float velLength=length(prevVel-vel);
+    float velDisocclusion=clamp((velLength-.001)*100,0.,1.);
+    vec4 curColorClamped=clamp(curColor,minColor,maxColor);
+    
     // TAA resolve
     vec4 prevColor=imageLoad(prevColorRead,reprojectedImgCoords);
     
     // Clamp previous color to min/max bounding box
     vec4 previousColorClamped=clamp(prevColor,minColor,maxColor);
     
-    vec4 color=.1*curColor+.9*previousColorClamped;
+    vec4 color=mix(.1*curColor+.9*previousColorClamped,curColorClamped,velDisocclusion);
     
     imageStore(prevColorWrite,imgCoord,color);
     fragOut=color;
