@@ -2,10 +2,8 @@ uniform sampler2D curColorTex;
 uniform sampler2D motionVecTex;
 uniform sampler2D depthTex;
 
-layout(binding=0,rgba8)uniform image2D imgRead;
-layout(binding=1,rgba8)uniform image2D imgWrite;
-layout(binding=2,rgba8)uniform image2D prevColorRead;
-layout(binding=3,rgba8)uniform image2D prevColorWrite;
+layout(binding=0,rgba8)uniform image2D prevColorRead;
+layout(binding=1,rgba8)uniform image2D prevColorWrite;
 
 uniform ivec2 resolution;
 uniform ivec2 lowResResolution;
@@ -87,11 +85,9 @@ void main(){
     
     color=.1*curColor+.9*previousColorClamped;
     
-    imageStore(imgWrite,imgCoord,color);
     imageStore(prevColorWrite,lowResImgCoord,color);
     fragOut=color;
     #else
-    imageStore(imgWrite,imgCoord,curColor);
     fragOut=curColor;
     #endif
 }

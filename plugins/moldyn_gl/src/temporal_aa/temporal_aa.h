@@ -70,16 +70,10 @@ private:
     core::param::ParamSlot scaling_mode_param;
 
     std::shared_ptr<glowl::FramebufferObject> fbo_;
-    std::shared_ptr<glowl::FramebufferObject> old_fbo_; // save the previous color
     std::shared_ptr<glowl::GLSLProgram> temporal_aa_prgm_;
     std::unique_ptr<msf::ShaderFactoryOptionsOpenGL> shader_options_flags_;
     glowl::TextureLayout texLayout_;
-    glowl::TextureLayout distTexLayout_;
     glowl::TextureLayout velTexLayout_;
-    std::unique_ptr<glowl::Texture2D> texRead_;
-    std::unique_ptr<glowl::Texture2D> texWrite_;
-    std::unique_ptr<glowl::Texture2D> distTexRead_;
-    std::unique_ptr<glowl::Texture2D> distTexWrite_;
     std::unique_ptr<glowl::Texture2D> old_lowres_color_read_;
     std::unique_ptr<glowl::Texture2D> old_lowres_color_write_;
     std::shared_ptr<glowl::Texture2D> zero_velocity_texture_;
@@ -90,7 +84,6 @@ private:
     // Render State
     glm::mat4 viewProjMx_;
     glm::mat4 lastViewProjMx_;
-    glm::mat4 view_;
     glm::vec2 resolution_;
     int oldWidth_ = -1;
     int oldHeight_ = -1;

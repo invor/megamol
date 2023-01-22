@@ -2,23 +2,12 @@ uniform sampler2D curColorTex;
 uniform sampler2D motionVecTex;
 uniform sampler2D depthTex;
 
-layout(binding=0,rgba8)uniform image2D imgRead;
-layout(binding=1,rgba8)uniform image2D imgWrite;
-layout(binding=2,rg32f)uniform image2D imgPosRead;
-layout(binding=3,rg32f)uniform image2D imgPosWrite;
-layout(binding=4,rgba8)uniform image2D prevColorRead;
-layout(binding=5,rgba8)uniform image2D prevColorWrite;
+layout(binding=0,rgba8)uniform image2D prevColorRead;
+layout(binding=1,rgba8)uniform image2D prevColorWrite;
 
 uniform ivec2 resolution;
-uniform mat4 shiftMx;
-uniform vec3 camCenter;
-uniform float camAspect;
-uniform float frustumHeight;
 uniform vec2 prevJitter;
 uniform vec2 curJitter;
-uniform mat4 viewProjMx;
-uniform mat4 viewMx;
-uniform mat4 projMx;
 uniform mat4 lastViewProjMx;
 uniform mat4 invViewMx;
 uniform mat4 invProjMx;
@@ -42,9 +31,8 @@ vec3 depthToWorldPos(float depth,vec2 uv){
 }
 
 void main(){
-    const vec2 frustumSize=vec2(frustumHeight*camAspect,frustumHeight);
     const ivec2 imgCoord=ivec2(int(uvCoords.x*float(resolution.x)),int(uvCoords.y*float(resolution.y)));
-    const vec2 posWorldSpace=camCenter.xy+frustumSize*(uvCoords-.5f);
+    
     vec4 color=vec4(0.f);
     vec4 curColor=vec4(0.f);
     
@@ -53,7 +41,6 @@ void main(){
     vec4 maxColor=vec4(-9999.f,-9999.f,-9999.f,1.f);
     
     curColor=texelFetch(curColorTex,imgCoord,0);
-    imageStore(imgPosWrite,imgCoord,vec4(posWorldSpace,0.f,0.f));
     
     // Sample a 3x3 neighborhood to create a box in color space
     for(int x=-1;x<=1;++x)
@@ -77,20 +64,13 @@ void main(){
     clipCoord=clipCoord/clipCoord.w;
     ivec2 reprojectedImgCoords=ivec2(int(clipCoord.x*float(resolution.x)),int(clipCoord.y*float(resolution.y)));
     
-    /*
-    vec3 vel=texelFetch(motionVecTex,imgCoord- ivec2(curJitter) - ivec2(prevJitter),0).rgb;
-    ivec2 reprojectedImgCoords=ivec2(int(uvCoords.x*float(resolution.x) + vel.x),int(uvCoords.y*float(resolution.y + vel.y)));
-    */
+    vec4 prevColor=imageLoad(prevColorRead,reprojectedImgCoords);
     
-    vec4 prevColor=vec4(0.f);
-    
-    prevColor=imageLoad(prevColorRead,reprojectedImgCoords);
     // Clamp previous color to min/max bounding box
     vec4 previousColorClamped=clamp(prevColor,minColor,maxColor);
     
     color=.1*curColor+.9*previousColorClamped;
     
-    imageStore(imgWrite,imgCoord,color);
     imageStore(prevColorWrite,imgCoord,color);
     fragOut=color;
 }

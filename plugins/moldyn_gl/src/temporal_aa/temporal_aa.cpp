@@ -60,8 +60,6 @@ bool TemporalAA::create() {
 
     fbo_ = std::make_shared<glowl::FramebufferObject>(1, 1);
     fbo_->createColorAttachment(GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
-    old_fbo_ = std::make_shared<glowl::FramebufferObject>(1, 1);
-    old_fbo_->createColorAttachment(GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
 
     // create halton numbers
     for (int iter = 0; iter < 128; iter++) {
@@ -71,15 +69,6 @@ bool TemporalAA::create() {
 
     // Store texture layout for later resize
     texLayout_ = glowl::TextureLayout(GL_RGBA8, 1, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, 1,
-        {
-            {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER},
-            {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER},
-            {GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER},
-            {GL_TEXTURE_MIN_FILTER, GL_NEAREST},
-            {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
-        },
-        {});
-    distTexLayout_ = glowl::TextureLayout(GL_RG32F, 1, 1, 1, GL_RG, GL_FLOAT, 1,
         {
             {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER},
             {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER},
@@ -99,12 +88,8 @@ bool TemporalAA::create() {
         },
         {});
 
-    texRead_ = std::make_unique<glowl::Texture2D>("texStoreA", texLayout_, nullptr);
-    texWrite_ = std::make_unique<glowl::Texture2D>("texStoreB", texLayout_, nullptr);
     old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", texLayout_, nullptr);
     old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", texLayout_, nullptr);
-    distTexRead_ = std::make_unique<glowl::Texture2D>("distTexR", distTexLayout_, nullptr);
-    distTexWrite_ = std::make_unique<glowl::Texture2D>("distTexW", distTexLayout_, nullptr);
     return true;
 }
 
@@ -160,7 +145,6 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     lastViewProjMx_ = viewProjMx_;
     viewProjMx_ = cam.getProjectionMatrix() * cam.getViewMatrix();
 
-    view_ = cam.getViewMatrix();
     resolution_ = glm::vec2(lhs_input_fbo->getWidth(), lhs_input_fbo->getHeight());
 
     fbo_->bind();
@@ -210,10 +194,6 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 
     time_ = cur_time;
 
-    if (frames_ == 1) {
-        fbo_->getColorAttachment(0)->copy(fbo_->getColorAttachment(0).get(), old_lowres_color_read_.get());
-    }
-
     glViewport(0, 0, w, h);
     lhs_input_fbo->bind();
 
@@ -226,18 +206,9 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 
     temporal_aa_prgm_->setUniform("resolution", w, h);
     temporal_aa_prgm_->setUniform("lowResResolution", fbo_->getWidth(), fbo_->getHeight());
-    temporal_aa_prgm_->setUniform("shiftMx", glm::mat4(shiftMx));
-    temporal_aa_prgm_->setUniform("camCenter", cam.getPose().position);
-    temporal_aa_prgm_->setUniform("camAspect", intrinsics.aspect.value());
-    temporal_aa_prgm_->setUniform("frustumHeight", frustrum_height);
     temporal_aa_prgm_->setUniform("prevJitter", prev_jitter_);
     temporal_aa_prgm_->setUniform("curJitter", cur_jitter_);
-    temporal_aa_prgm_->setUniform("numSamples", num_samples_);
-    temporal_aa_prgm_->setUniform("frameIdx", frameIdx_);
     temporal_aa_prgm_->setUniform("samplingSequencePosition", samplingSequencePosition_);
-    temporal_aa_prgm_->setUniform("viewProjMx", viewProjMx_);
-    temporal_aa_prgm_->setUniform("viewMx", cam.getViewMatrix());
-    temporal_aa_prgm_->setUniform("projMx", cam.getProjectionMatrix());
     temporal_aa_prgm_->setUniform("lastViewProjMx", lastViewProjMx_);
     temporal_aa_prgm_->setUniform("invViewMx", glm::inverse(cam.getViewMatrix()));
     temporal_aa_prgm_->setUniform("invProjMx", glm::inverse(cam.getProjectionMatrix()));
@@ -254,19 +225,13 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     depth_texture->bindTexture();
     temporal_aa_prgm_->setUniform("depthTex", 12);
 
-    texRead_->bindImage(0, GL_READ_ONLY);
-    texWrite_->bindImage(1, GL_WRITE_ONLY);
-    distTexRead_->bindImage(2, GL_READ_ONLY);
-    distTexWrite_->bindImage(3, GL_WRITE_ONLY);
-    old_lowres_color_read_->bindImage(4, GL_READ_ONLY);
-    old_lowres_color_write_->bindImage(5, GL_WRITE_ONLY);
+    old_lowres_color_read_->bindImage(0, GL_READ_ONLY);
+    old_lowres_color_write_->bindImage(1, GL_WRITE_ONLY);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
     glUseProgram(0);
 
-    texRead_.swap(texWrite_);
-    distTexRead_.swap(distTexWrite_);
     old_lowres_color_read_.swap(old_lowres_color_write_);
 
     return true;
@@ -312,7 +277,6 @@ bool TemporalAA::updateParams() {
 
 
         fbo_->resize(oldWidth_ / 2, oldHeight_);
-        old_fbo_->resize(oldWidth_ / 2, oldHeight_);
         camOffsets_.resize(2);
 
         for (int j = 0; j < 2; j++) {
@@ -354,19 +318,6 @@ bool TemporalAA::updateParams() {
 
     viewProjMx_ = glm::mat4(1.0f);
     lastViewProjMx_ = glm::mat4(1.0f);
-
-    texLayout_.width = oldWidth_;
-    texLayout_.height = oldHeight_;
-    const std::vector<uint32_t> zeroData(oldWidth_ * oldHeight_, 0); // uin32_t <=> RGBA8.
-    texRead_ = std::make_unique<glowl::Texture2D>("texRead", texLayout_, zeroData.data());
-    texWrite_ = std::make_unique<glowl::Texture2D>("texWrite", texLayout_, zeroData.data());
-
-
-    distTexLayout_.width = oldWidth_;
-    distTexLayout_.height = oldHeight_;
-    const std::vector<float> posInit(2 * oldWidth_ * oldHeight_, std::numeric_limits<float>::lowest()); // RG32F
-    distTexRead_ = std::make_unique<glowl::Texture2D>("distTexRead", distTexLayout_, posInit.data());
-    distTexWrite_ = std::make_unique<glowl::Texture2D>("distTexWrite", distTexLayout_, posInit.data());
 
     // recompile shader
     try {
