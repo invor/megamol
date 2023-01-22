@@ -87,7 +87,6 @@ private:
     glm::vec2 resolution_;
     int oldWidth_ = -1;
     int oldHeight_ = -1;
-    glm::uint frames_ = 0;
     glm::vec2 prev_jitter_;
     glm::vec2 cur_jitter_;
     float time_ = 0.0f;
@@ -97,7 +96,6 @@ private:
     glm::uint old_num_samples_;
     ScalingMode scaling_mode_ = ScalingMode::NONE;
     ScalingMode old_scaling_mode_ = ScalingMode::NONE;
-    int frameIdx_ = 0;
     int samplingSequencePosition_;
 
     std::vector<int> samplingSequence_;
@@ -108,7 +106,7 @@ private:
     core::CallerSlot m_depth_texture_call_;
 
     // halton variables
-    glm::vec2 halton_sequence_[128];
+    glm::vec2 halton_sequence_[32];
     float halton_scale_;
 
     /**

@@ -39,29 +39,28 @@ void main(){
     // get reprojected position for previous color texture
     float depth=texelFetch(depthTex,lowResImgCoord,0).r;
     vec3 worldPos=depthToWorldPos(depth,uvCoords);
-    vec3 vel=texelFetch(motionVecTex,lowResImgCoord-ivec2(prevJitter)-ivec2(curJitter),0).rgb;
+    vec3 vel=texelFetch(motionVecTex,lowResImgCoord,0).rgb;
     vec3 prevWorldPos=worldPos-vel;
     
     vec4 clipCoord=lastViewProjMx*vec4(prevWorldPos,1);
     clipCoord=clipCoord/clipCoord.w;
-    ivec2 reprojectedImgCoords=ivec2(int(lowResResolution.x*float(resolution.x)),int(clipCoord.y*float(lowResResolution.y)));
+    clipCoord=(clipCoord+1.)/2.;
+    ivec2 reprojectedImgCoords=ivec2(int(clipCoord.x*float(resolution.x)),int(clipCoord.y*float(resolution.y)));
     
-    vec4 color=vec4(0.f);
     vec4 curColor=vec4(0.f);
-    
-    // Arbitrary out of range numbers
-    vec4 minColor=vec4(9999.f,9999.f,9999.f,1.f);
-    vec4 maxColor=vec4(-9999.f,-9999.f,-9999.f,1.f);
     
     // Checkerboard rendering resolve
     if((samplingSequencePosition==0&&imgCoord.x%2==0)||(samplingSequencePosition==1&&imgCoord.x%2==1)){
         curColor=texelFetch(curColorTex,lowResImgCoord,0);
     }else{
         curColor=imageLoad(prevColorRead,reprojectedImgCoords);
-        imageStore(prevColorWrite,lowResImgCoord,curColor);
     }
     
     #ifdef TAA
+    // Arbitrary out of range numbers
+    vec4 minColor=vec4(9999.f,9999.f,9999.f,1.f);
+    vec4 maxColor=vec4(-9999.f,-9999.f,-9999.f,1.f);
+    
     // Sample a 2x2 neighborhood to create a box in color space
     // compared to normal TAA just 2x2 because of lower resolution (this produces smoother edges compared too using 3x3)
     for(int x=-1;x<=0;++x)
@@ -83,11 +82,12 @@ void main(){
     // Clamp previous color to min/max bounding box
     vec4 previousColorClamped=clamp(prevColor,minColor,maxColor);
     
-    color=.1*curColor+.9*previousColorClamped;
+    vec4 color=.1*curColor+.9*previousColorClamped;
     
-    imageStore(prevColorWrite,lowResImgCoord,color);
+    imageStore(prevColorWrite,imgCoord,color);
     fragOut=color;
     #else
+    imageStore(prevColorWrite,imgCoord,curColor);
     fragOut=curColor;
     #endif
 }

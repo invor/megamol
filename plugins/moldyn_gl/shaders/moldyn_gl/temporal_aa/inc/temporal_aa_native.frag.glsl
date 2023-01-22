@@ -55,6 +55,7 @@ void main(){
     }
     
     // get reprojected position for previous color texture
+    
     float depth=texelFetch(depthTex,imgCoord,0).r;
     vec3 worldPos=depthToWorldPos(depth,uvCoords);
     vec3 vel=texelFetch(motionVecTex,imgCoord-ivec2(prevJitter)-ivec2(curJitter),0).rgb;
@@ -62,6 +63,8 @@ void main(){
     
     vec4 clipCoord=lastViewProjMx*vec4(prevWorldPos,1);
     clipCoord=clipCoord/clipCoord.w;
+    clipCoord=(clipCoord+1.)/2.;
+    
     ivec2 reprojectedImgCoords=ivec2(int(clipCoord.x*float(resolution.x)),int(clipCoord.y*float(resolution.y)));
     
     vec4 prevColor=imageLoad(prevColorRead,reprojectedImgCoords);
@@ -70,7 +73,6 @@ void main(){
     vec4 previousColorClamped=clamp(prevColor,minColor,maxColor);
     
     color=.1*curColor+.9*previousColorClamped;
-    
     imageStore(prevColorWrite,imgCoord,color);
     fragOut=color;
 }

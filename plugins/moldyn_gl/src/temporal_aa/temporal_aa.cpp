@@ -62,7 +62,7 @@ bool TemporalAA::create() {
     fbo_->createColorAttachment(GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
 
     // create halton numbers
-    for (int iter = 0; iter < 128; iter++) {
+    for (int iter = 0; iter < 32; iter++) {
         halton_sequence_[iter] =
             glm::vec2(halton::createHaltonNumber(iter + 1, 2), halton::createHaltonNumber(iter + 1, 3));
     }
@@ -90,6 +90,7 @@ bool TemporalAA::create() {
 
     old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", texLayout_, nullptr);
     old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", texLayout_, nullptr);
+    zero_velocity_texture_ = std::make_unique<glowl::Texture2D>("zeroVelocity", velTexLayout_, nullptr);
     return true;
 }
 
@@ -122,7 +123,6 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     halton_scale_ = halton_scale_param.Param<core::param::FloatParam>()->Value();
     num_samples_ = num_samples_param.Param<core::param::IntParam>()->Value();
     scaling_mode_ = ScalingMode(scaling_mode_param.Param<core::param::EnumParam>()->Value());
-    frames_++;
 
     if (oldWidth_ != w || oldHeight_ != h || old_num_samples_ != num_samples_ || old_scaling_mode_ != scaling_mode_) {
         old_scaling_mode_ = scaling_mode_;
@@ -142,9 +142,6 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     rhs_chained_call->AccessBoundingBoxes() = call.GetBoundingBoxes();
     rhs_chained_call->SetViewResolution(call.GetViewResolution());
 
-    lastViewProjMx_ = viewProjMx_;
-    viewProjMx_ = cam.getProjectionMatrix() * cam.getViewMatrix();
-
     resolution_ = glm::vec2(lhs_input_fbo->getWidth(), lhs_input_fbo->getHeight());
 
     fbo_->bind();
@@ -157,7 +154,9 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     auto jittered_cam = cam;
     setupCamera(jittered_cam);
 
-    //rhs_chained_call->SetViewResolution({fbo_->getWidth(), fbo_->getHeight()});
+    lastViewProjMx_ = viewProjMx_;
+    viewProjMx_ = cam.getProjectionMatrix() * cam.getViewMatrix();
+
     rhs_chained_call->SetFramebuffer(fbo_);
     rhs_chained_call->SetCamera(jittered_cam);
 
@@ -197,11 +196,6 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     glViewport(0, 0, w, h);
     lhs_input_fbo->bind();
 
-    const glm::dmat4 shiftMx = glm::dmat4(lastViewProjMx_) * glm::inverse(glm::dmat4(viewProjMx_));
-
-    const auto intrinsics = cam.get<core::view::Camera::PerspectiveParameters>();
-
-    float frustrum_height = glm::tan(intrinsics.fovy * 0.5f) * 2.0f;
     temporal_aa_prgm_->use();
 
     temporal_aa_prgm_->setUniform("resolution", w, h);
@@ -275,7 +269,6 @@ bool TemporalAA::updateParams() {
             shader_options_flags_->addDefinition("TAA");
         }
 
-
         fbo_->resize(oldWidth_ / 2, oldHeight_);
         camOffsets_.resize(2);
 
@@ -284,17 +277,9 @@ bool TemporalAA::updateParams() {
             camOffsets_[j] = glm::vec3(x, 0.0f, 0.0f);
         }
 
-        auto layout = texLayout_;
-        layout.width = oldWidth_ / 2;
-        layout.height = oldHeight_;
-        const std::vector<uint32_t> zero_data((oldWidth_ / 2) * oldHeight_, 0);
-        old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", layout, zero_data.data());
-        old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", layout, zero_data.data());
-
         velTexLayout_.width = oldWidth_ / 2;
         velTexLayout_.height = oldHeight_;
-        const std::vector<float> velocity_zero_data(
-            3 * (oldWidth_ / 2) * oldHeight_, std::numeric_limits<float>::lowest());
+        const std::vector<float> velocity_zero_data(3 * (oldWidth_ / 2) * oldHeight_, 0.0f);
         zero_velocity_texture_ =
             std::make_unique<glowl::Texture2D>("velZeroData", velTexLayout_, velocity_zero_data.data());
 
@@ -302,19 +287,18 @@ bool TemporalAA::updateParams() {
         shader_options_flags_->addDefinition("NONE");
         fbo_->resize(oldWidth_, oldHeight_);
 
-        auto layout = texLayout_;
-        layout.width = oldWidth_;
-        layout.height = oldHeight_;
-        const std::vector<uint32_t> zero_data(oldWidth_ * oldHeight_, 0);
-        old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", layout, zero_data.data());
-        old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", layout, zero_data.data());
-
         velTexLayout_.width = oldWidth_;
         velTexLayout_.height = oldHeight_;
-        const std::vector<float> velocity_zero_data(3 * oldWidth_ * oldHeight_, std::numeric_limits<float>::lowest());
+        const std::vector<float> velocity_zero_data(3 * oldWidth_ * oldHeight_, 0.0f);
         zero_velocity_texture_ =
             std::make_unique<glowl::Texture2D>("velZeroData", velTexLayout_, velocity_zero_data.data());
     }
+
+    texLayout_.width = oldWidth_;
+    texLayout_.height = oldHeight_;
+    const std::vector<uint32_t> zero_data(oldWidth_ * oldHeight_, 0);
+    old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", texLayout_, zero_data.data());
+    old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", texLayout_, zero_data.data());
 
     viewProjMx_ = glm::mat4(1.0f);
     lastViewProjMx_ = glm::mat4(1.0f);
