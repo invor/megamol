@@ -63,7 +63,8 @@ protected:
 
 
 private:
-    enum ScalingMode { NONE = 0, CBR_WO_TAA = 1, CBR_W_TAA = 2 };
+    // TODO: NATIVE und NONE
+    enum ScalingMode { NONE = 0, NATIVE = 1, CBR_WO_TAA = 2, CBR_W_TAA = 3 };
 
     core::param::ParamSlot halton_scale_param;
     core::param::ParamSlot num_samples_param;
@@ -94,8 +95,8 @@ private:
     glm::uint
         num_samples_; // either the rotation of the halton_sequence or the upscaling factor (when upscaling turned on)
     glm::uint old_num_samples_;
-    ScalingMode scaling_mode_ = ScalingMode::NONE;
-    ScalingMode old_scaling_mode_ = ScalingMode::NONE;
+    ScalingMode scaling_mode_ = ScalingMode::NATIVE;
+    ScalingMode old_scaling_mode_ = ScalingMode::NATIVE;
     int samplingSequencePosition_;
 
     std::vector<int> samplingSequence_;

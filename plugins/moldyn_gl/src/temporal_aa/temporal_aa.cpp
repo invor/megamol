@@ -34,6 +34,7 @@ TemporalAA::TemporalAA(void)
 
     core::param::EnumParam* rmp = new core::param::EnumParam(scaling_mode_);
     rmp->SetTypePair(ScalingMode::NONE, getScalingModeString(ScalingMode::NONE).c_str());
+    rmp->SetTypePair(ScalingMode::NATIVE, getScalingModeString(ScalingMode::NATIVE).c_str());
     rmp->SetTypePair(ScalingMode::CBR_W_TAA, getScalingModeString(ScalingMode::CBR_W_TAA).c_str());
     rmp->SetTypePair(ScalingMode::CBR_WO_TAA, getScalingModeString(ScalingMode::CBR_WO_TAA).c_str());
     scaling_mode_param << rmp;
@@ -245,7 +246,7 @@ void TemporalAA::setupCamera(core::view::Camera& cam) {
         samplingSequencePosition_ = (samplingSequencePosition_ + 1) % (2);
         jitter = glm::vec2(camOffsets_[samplingSequencePosition_].x, 0.f);
 
-    } else {
+    } else if (scaling_mode_ == ScalingMode::NATIVE) {
         samplingSequencePosition_ = (samplingSequencePosition_ + 1) % num_samples_;
         float delta_width = 1. / resolution_.x;
         float delta_height = 1. / resolution_.y;
@@ -292,7 +293,9 @@ bool TemporalAA::updateParams() {
         previous_vel_texture_ =
             std::make_unique<glowl::Texture2D>("prevVelocity", velTexLayout_, velocity_zero_data.data());
     } else {
-        shader_options_flags_->addDefinition("NONE");
+        if (scaling_mode_ == ScalingMode::NATIVE) {
+            shader_options_flags_->addDefinition("NATIVE");
+        }
         fbo_->resize(oldWidth_, oldHeight_);
 
         velTexLayout_.width = oldWidth_;
@@ -331,6 +334,9 @@ std::string TemporalAA::getScalingModeString(ScalingMode sm) {
     switch (sm) {
     case (ScalingMode::NONE):
         mode = "None";
+        break;
+    case (ScalingMode::NATIVE):
+        mode = "Taa with Native Resolution";
         break;
     case (ScalingMode::CBR_WO_TAA):
         mode = "Checkerboard-Rendering without TAA";
