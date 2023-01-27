@@ -26,7 +26,7 @@ TemporalAA::TemporalAA(void)
     MakeSlotAvailable(&chainRenderSlot);
     MakeSlotAvailable(&renderSlot);
 
-    halton_scale_param << new core::param::FloatParam(1.0, 0.0, 1000.0, 0.5);
+    halton_scale_param << new core::param::FloatParam(0.25, 0.0, 1000.0, 0.5);
     MakeSlotAvailable(&halton_scale_param);
 
     num_samples_param << new core::param::IntParam(4, 1, 128, 1);
@@ -240,7 +240,7 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 }
 
 void TemporalAA::setupCamera(core::view::Camera& cam) {
-    glm::vec2 jitter;
+    glm::vec2 jitter{0.0f};
 
     if (scaling_mode_ == ScalingMode::CBR_W_TAA || scaling_mode_ == ScalingMode::CBR_WO_TAA) {
         samplingSequencePosition_ = (samplingSequencePosition_ + 1) % (2);
