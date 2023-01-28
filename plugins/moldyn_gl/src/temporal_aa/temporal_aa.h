@@ -75,8 +75,7 @@ private:
     std::unique_ptr<msf::ShaderFactoryOptionsOpenGL> shader_options_flags_;
     glowl::TextureLayout texLayout_;
     glowl::TextureLayout velTexLayout_;
-    std::unique_ptr<glowl::Texture2D> old_lowres_color_read_;
-    std::unique_ptr<glowl::Texture2D> old_lowres_color_write_;
+    std::unique_ptr<glowl::Texture2D> old_lowres_color_;
     std::shared_ptr<glowl::Texture2D> zero_velocity_texture_;
     std::shared_ptr<glowl::Texture2D> previous_vel_texture_;
     /** Dummy textures to use when no texture is connected */

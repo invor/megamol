@@ -1,10 +1,8 @@
 uniform sampler2D curColorTex;
+uniform sampler2D prevColorRead;
 uniform sampler2D motionVecTex;
 uniform sampler2D prevMotionVecTex;
 uniform sampler2D depthTex;
-
-layout(binding=0,rgba8)uniform image2D prevColorRead;
-layout(binding=1,rgba8)uniform image2D prevColorWrite;
 
 uniform ivec2 resolution;
 uniform vec2 prevJitter;
@@ -65,20 +63,17 @@ void main(){
     clipCoord=clipCoord/clipCoord.w;
     clipCoord=(clipCoord+1.)/2.;
     
-    ivec2 reprojectedImgCoords=ivec2(int(clipCoord.x*float(resolution.x)),int(clipCoord.y*float(resolution.y)));
-    
     // velocity rejection
-    vec3 prevVel=texelFetch(motionVecTex,reprojectedImgCoords,0).rgb;
+    vec3 prevVel=texture(motionVecTex,clipCoord.xy).rgb;
     float velLength=length(prevVel-vel);
     float velDisocclusion=clamp((velLength-.001)*100,0.,1.);
     vec4 curColorClamped=clamp(curColor,minColor,maxColor);
     
-    vec4 prevColor=imageLoad(prevColorRead,reprojectedImgCoords);
+    vec4 prevColor=texture(prevColorRead,clipCoord.xy);
     
     // Clamp previous color to min/max bounding box
     vec4 previousColorClamped=clamp(prevColor,minColor,maxColor);
     
     color=mix(.1*curColor+.9*previousColorClamped,curColorClamped,velDisocclusion);
-    imageStore(prevColorWrite,imgCoord,color);
     fragOut=color;
 }

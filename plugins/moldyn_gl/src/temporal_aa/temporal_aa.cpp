@@ -89,8 +89,7 @@ bool TemporalAA::create() {
         },
         {});
 
-    old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", texLayout_, nullptr);
-    old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", texLayout_, nullptr);
+    old_lowres_color_ = std::make_unique<glowl::Texture2D>("oldColorR", texLayout_, nullptr);
     zero_velocity_texture_ = std::make_unique<glowl::Texture2D>("zeroVelocity", velTexLayout_, nullptr);
     previous_vel_texture_ = std::make_unique<glowl::Texture2D>("prevVelocity", velTexLayout_, nullptr);
     return true;
@@ -225,8 +224,9 @@ bool TemporalAA::Render(CallRender3DGL& call) {
     depth_texture->bindTexture();
     temporal_aa_prgm_->setUniform("depthTex", 3);
 
-    old_lowres_color_read_->bindImage(0, GL_READ_ONLY);
-    old_lowres_color_write_->bindImage(1, GL_WRITE_ONLY);
+    glActiveTexture(GL_TEXTURE4);
+    old_lowres_color_->bindTexture();
+    temporal_aa_prgm_->setUniform("prevColorRead", 4);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
@@ -234,7 +234,7 @@ bool TemporalAA::Render(CallRender3DGL& call) {
 
     motion_vector_texture->copy(motion_vector_texture.get(), previous_vel_texture_.get());
 
-    old_lowres_color_read_.swap(old_lowres_color_write_);
+    lhs_input_fbo->getColorAttachment(0)->copy(lhs_input_fbo->getColorAttachment(0).get(), old_lowres_color_.get());
 
     return true;
 }
@@ -310,8 +310,7 @@ bool TemporalAA::updateParams() {
     texLayout_.width = oldWidth_;
     texLayout_.height = oldHeight_;
     const std::vector<uint32_t> zero_data(oldWidth_ * oldHeight_, 0);
-    old_lowres_color_read_ = std::make_unique<glowl::Texture2D>("oldColorR", texLayout_, zero_data.data());
-    old_lowres_color_write_ = std::make_unique<glowl::Texture2D>("oldColorW", texLayout_, zero_data.data());
+    old_lowres_color_ = std::make_unique<glowl::Texture2D>("oldColorR", texLayout_, zero_data.data());
 
     viewProjMx_ = glm::mat4(1.0f);
     lastViewProjMx_ = glm::mat4(1.0f);

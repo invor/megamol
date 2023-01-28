@@ -1,10 +1,8 @@
 uniform sampler2D curColorTex;
+uniform sampler2D prevColorRead;
 uniform sampler2D motionVecTex;
 uniform sampler2D prevMotionVecTex;
 uniform sampler2D depthTex;
-
-layout(binding=0,rgba8)uniform image2D prevColorRead;
-layout(binding=1,rgba8)uniform image2D prevColorWrite;
 
 uniform ivec2 resolution;
 uniform ivec2 lowResResolution;
@@ -46,7 +44,6 @@ void main(){
     vec4 clipCoord=lastViewProjMx*vec4(prevWorldPos,1);
     clipCoord=clipCoord/clipCoord.w;
     clipCoord=(clipCoord+1.)/2.;
-    ivec2 reprojectedImgCoords=ivec2(int(clipCoord.x*float(resolution.x)),int(clipCoord.y*float(resolution.y)));
     
     vec4 curColor=vec4(0.f);
     
@@ -54,7 +51,7 @@ void main(){
     if((samplingSequencePosition==0&&imgCoord.x%2==0)||(samplingSequencePosition==1&&imgCoord.x%2==1)){
         curColor=texelFetch(curColorTex,lowResImgCoord,0);
     }else{
-        curColor=imageLoad(prevColorRead,reprojectedImgCoords);
+        curColor=texture(prevColorRead,clipCoord.xy);
     }
     
     #ifdef TAA
@@ -79,23 +76,21 @@ void main(){
     
     // velocity rejection
     ivec2 lowresReprojectedCoords=ivec2(int(clipCoord.x*float(lowResResolution.x)),int(clipCoord.y*float(lowResResolution.y)));
-    vec3 prevVel=texelFetch(motionVecTex,lowresReprojectedCoords,0).rgb;
+    vec3 prevVel=texture(motionVecTex,clipCoord.xy).rgb;
     float velLength=length(prevVel-vel);
     float velDisocclusion=clamp((velLength-.001)*100,0.,1.);
     vec4 curColorClamped=clamp(curColor,minColor,maxColor);
     
     // TAA resolve
-    vec4 prevColor=imageLoad(prevColorRead,reprojectedImgCoords);
+    vec4 prevColor=texture(prevColorRead,clipCoord.xy);
     
     // Clamp previous color to min/max bounding box
     vec4 previousColorClamped=clamp(prevColor,minColor,maxColor);
     
     vec4 color=mix(.1*curColor+.9*previousColorClamped,curColorClamped,velDisocclusion);
     
-    imageStore(prevColorWrite,imgCoord,color);
     fragOut=color;
     #else
-    imageStore(prevColorWrite,imgCoord,curColor);
     fragOut=curColor;
     #endif
 }
