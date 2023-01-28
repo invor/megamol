@@ -245,7 +245,6 @@ void TemporalAA::setupCamera(core::view::Camera& cam) {
     if (scaling_mode_ == ScalingMode::CBR_W_TAA || scaling_mode_ == ScalingMode::CBR_WO_TAA) {
         samplingSequencePosition_ = (samplingSequencePosition_ + 1) % (2);
         jitter = glm::vec2(camOffsets_[samplingSequencePosition_].x, 0.f);
-
     } else if (scaling_mode_ == ScalingMode::NATIVE) {
         samplingSequencePosition_ = (samplingSequencePosition_ + 1) % num_samples_;
         float delta_width = 1. / resolution_.x;
@@ -260,9 +259,10 @@ void TemporalAA::setupCamera(core::view::Camera& cam) {
     prev_jitter_ = cur_jitter_;
     cur_jitter_ = jitter;
 
-    auto pose = cam.get<core::view::Camera::Pose>();
-    pose.position += glm::vec3(jitter.x, jitter.y, 0.0f);
-    cam.setPose(pose);
+    auto persp_param = cam.get<core::view::Camera::PerspectiveParameters>();
+    persp_param.image_plane_tile.tile_start = glm::vec2(jitter.x, jitter.y);
+    persp_param.image_plane_tile.tile_end = glm::vec2(1.0 + jitter.x, 1.0 + jitter.y);
+    cam.setPerspectiveProjection(persp_param);
 }
 
 bool TemporalAA::updateParams() {
