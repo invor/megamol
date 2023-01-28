@@ -12,6 +12,7 @@
 #include "DrawToScreen.h"
 #include "InteractionRenderTarget.h"
 #include "LocalLighting.h"
+#include "MotionVectorRenderTarget.h"
 #include "NormalFromDepth.h"
 #include "PNGDataSource.h"
 #include "SSAO.h"
@@ -41,6 +42,7 @@ public:
         this->module_descriptions.RegisterAutoDescription<megamol::compositing_gl::InteractionRenderTarget>();
         this->module_descriptions.RegisterAutoDescription<megamol::compositing_gl::LocalLighting>();
         this->module_descriptions.RegisterAutoDescription<megamol::compositing_gl::SimpleRenderTarget>();
+        this->module_descriptions.RegisterAutoDescription<megamol::compositing_gl::MotionVectorRenderTarget>();
         this->module_descriptions.RegisterAutoDescription<megamol::compositing_gl::TextureCombine>();
         this->module_descriptions.RegisterAutoDescription<megamol::compositing_gl::TextureDepthCompositing>();
         this->module_descriptions.RegisterAutoDescription<megamol::compositing_gl::NormalFromDepth>();
